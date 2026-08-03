@@ -30,7 +30,8 @@ DWORD WINAPI InitializeBridge(LPVOID) noexcept {
         return 0;
     }
 
-    (void)sf::InitializeCurrentProcess(*candidate);
+    const auto hookStatus = sf::InitializeCurrentProcess(*candidate);
+    sf::DiagnosticLogFormat("Init: %s", sf::VtableHookStatusName(hookStatus));
     return 0;
 }
 
