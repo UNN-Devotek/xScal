@@ -5,7 +5,7 @@
 
 namespace sf::config {
 
-inline constexpr std::string_view kXScalVersion{"0.1.0"};
+inline constexpr std::string_view kXScalVersion{"0.1.1"};
 
 struct RuntimeVersion final {
     std::uint16_t major;
