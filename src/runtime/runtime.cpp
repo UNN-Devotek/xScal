@@ -12,9 +12,6 @@
 namespace sf {
 namespace {
 
-[[nodiscard]] const char* PlatformName(TargetKind kind) noexcept {
-    return kind == TargetKind::Steam ? "steam" : "gamepass";
-}
 
 [[nodiscard]] bool ReadSystemRuntimeVersion(const wchar_t* path, config::RuntimeVersion& version) noexcept {
     if (path == nullptr || path[0] == L'\0') return false;
@@ -38,7 +35,7 @@ namespace {
 void LogRuntimeConfiguration(const TargetProfile& profile, std::uintptr_t base,
                              const config::RuntimeVersion* version) noexcept {
     DiagnosticLogFormat(
-        "xScal v%.*s minimal init by DCHoaxer",
+        "xScal v%.*s minimal init @DCHoaxer",
         static_cast<int>(config::kXScalVersion.size()),
         config::kXScalVersion.data());
     DiagnosticLogFormat("imagebase = %p", reinterpret_cast<void*>(base));
@@ -48,9 +45,9 @@ void LogRuntimeConfiguration(const TargetProfile& profile, std::uintptr_t base,
     } else {
         DiagnosticLog("runtime version: unknown");
     }
-    DiagnosticLogFormat("platform: %s", PlatformName(profile.kind));
     DiagnosticLogFormat("RVA setMember=0x%llX",
                         static_cast<unsigned long long>(profile.set_member_offset));
+    DiagnosticLogFormat("platform: %s", TargetKindName(profile.kind));
 }
 
 [[nodiscard]] bool IsNewer(const config::RuntimeVersion& found,

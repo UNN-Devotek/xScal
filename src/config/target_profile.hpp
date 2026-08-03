@@ -14,6 +14,14 @@ enum class TargetKind {
     GamePass,
 };
 
+[[nodiscard]] constexpr const char* TargetKindName(TargetKind kind) noexcept {
+    switch (kind) {
+        case TargetKind::Steam: return "steam";
+        case TargetKind::GamePass: return "gamepass";
+        default: return "unknown";
+    }
+}
+
 // All offsets are relative to the main executable module base. The only
 // installable hook target is the primary MovieRoot GetVariable slot. Its
 // initializer deliberately preserves the recovered `vtable base + 0x190`

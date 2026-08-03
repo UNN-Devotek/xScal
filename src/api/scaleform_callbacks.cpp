@@ -81,10 +81,9 @@ namespace sf {
 
         // HELPER FUNCTIONS
 
-        [[nodiscard]] const char* RuntimePlatformName() noexcept {
-            return runtime_platform.load(std::memory_order_acquire) == TargetKind::GamePass
-                ? "gamepass"
-                : "steam";
+        [[nodiscard]] const char* RuntimePlatformName() noexcept 
+        {
+            return TargetKindName(runtime_platform.load(std::memory_order_acquire));
         }
         
         [[nodiscard]] bool PrevalidateInputContent(std::string_view payloadContent) noexcept
@@ -333,7 +332,9 @@ namespace sf {
             try {
                 std::string runtime_info{ "{\"runtime\":\"xScal\",\"version\":\"" };
                 runtime_info.append(config::kXScalVersion.data(), config::kXScalVersion.size());
-                runtime_info += "\",\"platform\":\"steam\"}";
+                runtime_info += "\",\"platform\":\"";
+                runtime_info += RuntimePlatformName();
+                runtime_info += "\"}";
                 return call->result->SetString(runtime_info);
             }
             catch (...) {
