@@ -86,6 +86,23 @@ namespace sf {
                 ? "gamepass"
                 : "steam";
         }
+        
+        [[nodiscard]] bool PrevalidateInputContent(std::string_view payloadContent) noexcept
+        {
+            constexpr std::size_t kMaxPayloadSize = 200'000; // 200 KB for now. sShould put it elsewhere.
+
+            if (payloadContent.empty() || payloadContent.size() > kMaxPayloadSize) return false;
+            for (unsigned char c : payloadContent) {
+                if (c == '\0')
+                    return false;
+
+                 // CR/LF/TAB are ok
+                if (c < 0x20 && c != '\r' && c != '\n' && c != '\t')
+                    return false;
+            }
+
+            return true;
+        }
 
         [[nodiscard]] bool ResolvePath(const wchar_t* relativePath, std::filesystem::path& resolvedPath) noexcept
         {
@@ -117,6 +134,10 @@ namespace sf {
             try {
                 std::filesystem::path targetPath;
                 if (!ResolvePath(relativePath, targetPath)) {
+                    return false;
+                }
+
+                if(!PrevalidateInputContent(data)) {
                     return false;
                 }
 
