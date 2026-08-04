@@ -21,12 +21,12 @@ struct VtableHookPlatform final {
     using FlushInstructionCacheFn = BOOL(WINAPI*)(HANDLE, LPCVOID, SIZE_T);
     using GetCurrentProcessFn = HANDLE(WINAPI*)();
 
-    VirtualQueryFn virtual_query{};
-    VirtualProtectFn virtual_protect{};
-    ExchangePointerFn exchange_pointer{};
-    CompareExchangePointerFn compare_exchange_pointer{};
-    FlushInstructionCacheFn flush_instruction_cache{};
-    GetCurrentProcessFn get_current_process{};
+    VirtualQueryFn virtualQuery{};
+    VirtualProtectFn virtualProtect{};
+    ExchangePointerFn exchangePointer{};
+    CompareExchangePointerFn compareExchangePointer{};
+    FlushInstructionCacheFn flushInstructionCache{};
+    GetCurrentProcessFn getCurrentProcess{};
 };
 
 [[nodiscard]] VtableHookPlatform SystemVtableHookPlatform() noexcept;
@@ -61,7 +61,7 @@ public:
 
     [[nodiscard]] VtableHookStatus Install(
         const TargetProfile& profile,
-        std::uintptr_t module_base,
+        std::uintptr_t moduleBase,
         MovieRootGetVariable hook) noexcept;
     [[nodiscard]] VtableHookStatus Restore() noexcept;
 
@@ -79,9 +79,9 @@ private:
     [[nodiscard]] bool HasCompletePlatform() const noexcept;
     [[nodiscard]] bool IsReadableSlot(void* slot) const noexcept;
     [[nodiscard]] bool IsExecutableTarget(void* target) const noexcept;
-    [[nodiscard]] bool RestoreProtection(void* slot, DWORD old_protection) const noexcept;
+    [[nodiscard]] bool RestoreProtection(void* slot, DWORD oldProtection) const noexcept;
     void BeginProtectionRecovery(
-        void** slot, DWORD old_protection, VtableHookStatus terminal_result) noexcept;
+        void** slot, DWORD oldProtection, VtableHookStatus terminalResult) noexcept;
     void Clear() noexcept;
 
     VtableHookPlatform platform_;
@@ -90,8 +90,8 @@ private:
     void** slot_{};
     MovieRootGetVariable original_{};
     void* hook_{};
-    DWORD recovery_old_protection_{};
-    VtableHookStatus recovery_result_{VtableHookStatus::NotActive};
+    DWORD recoveryOldProtection_{};
+    VtableHookStatus recoveryResult_{VtableHookStatus::NotActive};
 };
 
 }

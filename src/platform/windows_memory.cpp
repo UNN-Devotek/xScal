@@ -23,10 +23,10 @@ bool IsExecutableProtection(DWORD protection) noexcept {
     }
 }
 
-bool IsExecutableAddress(VirtualQueryFn virtual_query, const void* address) noexcept {
-    if (virtual_query == nullptr || address == nullptr) return false;
+bool IsExecutableAddress(VirtualQueryFn virtualQuery, const void* address) noexcept {
+    if (virtualQuery == nullptr || address == nullptr) return false;
     MEMORY_BASIC_INFORMATION region{};
-    return virtual_query(address, &region, sizeof(region)) != 0 &&
+    return virtualQuery(address, &region, sizeof(region)) != 0 &&
         region.State == MEM_COMMIT && IsExecutableProtection(region.Protect) &&
         RegionContains(region, address, 1);
 }
@@ -38,39 +38,39 @@ bool RegionContains(const MEMORY_BASIC_INFORMATION& region, const void* address,
     return value >= base && value - base <= region.RegionSize - size;
 }
 
-bool IsReadableRange(VirtualQueryFn virtual_query, const void* address, std::size_t size) noexcept {
-    if (virtual_query == nullptr || address == nullptr || size == 0) return false;
+bool IsReadableRange(VirtualQueryFn virtualQuery, const void* address, std::size_t size) noexcept {
+    if (virtualQuery == nullptr || address == nullptr || size == 0) return false;
     auto current = reinterpret_cast<std::uintptr_t>(address);
     if (size > (std::numeric_limits<std::uintptr_t>::max)() - current) return false;
     const auto end = current + size;
     while (current < end) {
         MEMORY_BASIC_INFORMATION region{};
-        if (virtual_query(reinterpret_cast<const void*>(current), &region, sizeof(region)) == 0 ||
+        if (virtualQuery(reinterpret_cast<const void*>(current), &region, sizeof(region)) == 0 ||
             region.State != MEM_COMMIT || !IsReadableProtection(region.Protect) ||
             !RegionContains(region, reinterpret_cast<const void*>(current), 1)) return false;
         const auto base = reinterpret_cast<std::uintptr_t>(region.BaseAddress);
         if (region.RegionSize > (std::numeric_limits<std::uintptr_t>::max)() - base) return false;
-        const auto region_end = base + region.RegionSize;
-        if (region_end <= current) return false;
-        current = std::min(region_end, end);
+        const auto regionEnd = base + region.RegionSize;
+        if (regionEnd <= current) return false;
+        current = std::min(regionEnd, end);
     }
     return true;
 }
 
-bool GetReadableSpanEnd(VirtualQueryFn virtual_query, const char* current, std::size_t remaining, const char*& span_end) noexcept {
-    span_end = nullptr;
-    if (virtual_query == nullptr || current == nullptr || remaining == 0) return false;
+bool GetReadableSpanEnd(VirtualQueryFn virtualQuery, const char* current, std::size_t remaining, const char*& spanEnd) noexcept {
+    spanEnd = nullptr;
+    if (virtualQuery == nullptr || current == nullptr || remaining == 0) return false;
     MEMORY_BASIC_INFORMATION region{};
-    if (virtual_query(current, &region, sizeof(region)) == 0 || region.State != MEM_COMMIT ||
+    if (virtualQuery(current, &region, sizeof(region)) == 0 || region.State != MEM_COMMIT ||
         !IsReadableProtection(region.Protect) || !RegionContains(region, current, 1)) return false;
     const auto start = reinterpret_cast<std::uintptr_t>(current);
     const auto base = reinterpret_cast<std::uintptr_t>(region.BaseAddress);
     if (region.RegionSize > (std::numeric_limits<std::uintptr_t>::max)() - base ||
         remaining > (std::numeric_limits<std::uintptr_t>::max)() - start) return false;
-    const auto region_end = base + region.RegionSize;
-    const auto requested_end = start + remaining;
-    span_end = reinterpret_cast<const char*>(std::min(region_end, requested_end));
-    return span_end > current;
+    const auto regionEnd = base + region.RegionSize;
+    const auto requestedEnd = start + remaining;
+    spanEnd = reinterpret_cast<const char*>(std::min(regionEnd, requestedEnd));
+    return spanEnd > current;
 }
 
 }

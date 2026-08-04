@@ -21,14 +21,14 @@ bool IsObjectAlias(std::string_view path) noexcept {
 }
 
 bool IsDirectCallAlias(std::string_view path) noexcept {
-    constexpr std::string_view call_suffix = ".call";
-    return path.size() > call_suffix.size() && path.ends_with(call_suffix) &&
-        IsObjectAlias(path.substr(0, path.size() - call_suffix.size()));
+    constexpr std::string_view callSuffix = ".call";
+    return path.size() > callSuffix.size() && path.ends_with(callSuffix) &&
+        IsObjectAlias(path.substr(0, path.size() - callSuffix.size()));
 }
 
 bool ShouldEnsureRootBridge(std::string_view path) noexcept {
-    const bool root_qualified = path == "root1" || path.starts_with("root1.");
-    return root_qualified && path.find("__SFCodeObj") == std::string_view::npos;
+    const bool rootQualified = path == "root1" || path.starts_with("root1.");
+    return rootQualified && path.find("__SFCodeObj") == std::string_view::npos;
 }
 
 }

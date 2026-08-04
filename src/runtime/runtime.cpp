@@ -22,9 +22,9 @@ namespace {
         std::vector<std::byte> info(size);
         if (::GetFileVersionInfoW(path, 0, size, info.data()) == FALSE) return false;
         void* raw{};
-        UINT raw_size{};
-        if (::VerQueryValueW(info.data(), L"\\", &raw, &raw_size) == FALSE ||
-            raw == nullptr || raw_size < sizeof(VS_FIXEDFILEINFO)) return false;
+        UINT rawSize{};
+        if (::VerQueryValueW(info.data(), L"\\", &raw, &rawSize) == FALSE ||
+            raw == nullptr || rawSize < sizeof(VS_FIXEDFILEINFO)) return false;
         const auto* fixed = static_cast<const VS_FIXEDFILEINFO*>(raw);
         version = {HIWORD(fixed->dwFileVersionMS), LOWORD(fixed->dwFileVersionMS),
                    HIWORD(fixed->dwFileVersionLS), LOWORD(fixed->dwFileVersionLS)};
@@ -46,7 +46,7 @@ void LogRuntimeConfiguration(const TargetProfile& profile, std::uintptr_t base,
         DiagnosticLog("runtime version: unknown");
     }
     DiagnosticLogFormat("RVA setMember=0x%llX",
-                        static_cast<unsigned long long>(profile.set_member_offset));
+                        static_cast<unsigned long long>(profile.setMemberOffset));
     DiagnosticLogFormat("platform: %s", TargetKindName(profile.kind));
 }
 
@@ -68,7 +68,7 @@ void ShowRuntimeVersionError(const RuntimeProcessPlatform& platform,
             expected.major, expected.minor, expected.build, expected.revision);
     } else if (IsNewer(*found, expected)) {
         std::swprintf(message.data(), message.size(),
-            L"Damn, hold on! are using a newer version of Fallout 76 than this version of xScal supports.\n"
+            L"Damn, hold on! You are using a newer version of Fallout 76 than this version of xScal supports.\n"
             L"If this version just came out, please be patient while xScal is updated.\n\n"
             L"Runtime: %hu.%hu.%hu.%hu\nSupported: %hu.%hu.%hu.%hu\n\n"
             L"xScal features will be unavailable for this session.",
@@ -76,14 +76,14 @@ void ShowRuntimeVersionError(const RuntimeProcessPlatform& platform,
             expected.major, expected.minor, expected.build, expected.revision);
     } else {
         std::swprintf(message.data(), message.size(),
-            L"No idea how, buy you are using Fallout 76 version %hu.%hu.%hu.%hu, which is out of date "
+            L"No idea how, but you are using Fallout 76 version %hu.%hu.%hu.%hu, which is out of date "
             L"and incompatible with this version of xScal.\n\n"
             L"Required runtime: %hu.%hu.%hu.%hu\n\n"
             L"xScal features will be unavailable for this session.",
             found->major, found->minor, found->build, found->revision,
             expected.major, expected.minor, expected.build, expected.revision);
     }
-    platform.message_box(nullptr, message.data(), L"xScal", MB_OK | MB_ICONEXCLAMATION);
+    platform.messageBox(nullptr, message.data(), L"xScal", MB_OK | MB_ICONEXCLAMATION);
 }
 }
 
@@ -96,27 +96,27 @@ RuntimeProcessPlatform SystemRuntimeProcessPlatform() noexcept {
 }
 
 BridgeRuntime::BridgeRuntime(
-    CallbackRegistry& callback_registry,
-    VtableHookPlatform platform) noexcept : controller_(callback_registry, platform) {}
+    CallbackRegistry& callbackRegistry,
+    VtableHookPlatform platform) noexcept : controller_(callbackRegistry, platform) {}
 
-    VtableHookStatus BridgeRuntime::Initialize(
-        std::wstring_view executable_name,
-        std::uintptr_t module_base,
-        const config::RuntimeVersion& runtime_version) noexcept 
-    {
-        if (module_base == 0) return VtableHookStatus::InvalidArgument;
-        const TargetProfile* profile = SelectTargetProfile(executable_name);
-        if (profile == nullptr) return VtableHookStatus::InvalidArgument;
-        if (runtime_version != profile->expected_runtime_version) {
-            return VtableHookStatus::RuntimeVersionMismatch;
-        }
-        
-        SetScaleformRuntimePlatform(profile->kind);
-        return controller_.Install(*profile, module_base);
+VtableHookStatus BridgeRuntime::Initialize(
+    std::wstring_view executableName,
+    std::uintptr_t moduleBase,
+    const config::RuntimeVersion& runtimeVersion) noexcept
+{
+    if (moduleBase == 0) return VtableHookStatus::InvalidArgument;
+    const TargetProfile* profile = SelectTargetProfile(executableName);
+    if (profile == nullptr) return VtableHookStatus::InvalidArgument;
+    if (runtimeVersion != profile->expectedRuntimeVersion) {
+        return VtableHookStatus::RuntimeVersionMismatch;
     }
 
-    VtableHookStatus BridgeRuntime::Shutdown() noexcept {
-        return controller_.Restore();
+    SetScaleformRuntimePlatform(profile->kind);
+    return controller_.Install(*profile, moduleBase);
+}
+
+VtableHookStatus BridgeRuntime::Shutdown() noexcept {
+    return controller_.Restore();
 }
 
 bool BridgeRuntime::IsActive() const noexcept {
@@ -125,45 +125,44 @@ bool BridgeRuntime::IsActive() const noexcept {
 
 VtableHookStatus InitializeCurrentProcess(
     BridgeRuntime& runtime,
-
-    // validate platform
     RuntimeProcessPlatform platform) noexcept {
-    if (platform.get_module_file_name == nullptr || platform.get_module_handle == nullptr ||
-        platform.read_runtime_version == nullptr || platform.message_box == nullptr) {
+    // validate platform
+    if (platform.getModuleFileName == nullptr || platform.getModuleHandle == nullptr ||
+        platform.readRuntimeVersion == nullptr || platform.messageBox == nullptr) {
         return VtableHookStatus::InvalidPlatform;
     }
 
     // exe
     std::array<wchar_t, 32768> path{};
-    const DWORD length = platform.get_module_file_name(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    const DWORD length = platform.getModuleFileName(nullptr, path.data(), static_cast<DWORD>(path.size()));
     if (length == 0 || length >= path.size()) return VtableHookStatus::InvalidArgument;
 
     // gets basename
-    const std::wstring_view full_path{path.data(), length};
-    const std::size_t separator = full_path.find_last_of(L"\\/");
-    const std::wstring_view name = separator == std::wstring_view::npos ? full_path : full_path.substr(separator + 1);
+    const std::wstring_view fullPath{path.data(), length};
+    const std::size_t separator = fullPath.find_last_of(L"\\/");
+    const std::wstring_view name = separator == std::wstring_view::npos ? fullPath : fullPath.substr(separator + 1);
 
     // detect platform of the executable 
     const TargetProfile* profile = SelectTargetProfile(name);
     if (profile == nullptr) return VtableHookStatus::InvalidArgument;
 
     // return mh of the process
-    const HMODULE module = platform.get_module_handle(nullptr);
+    const HMODULE module = platform.getModuleHandle(nullptr);
     if (module == nullptr) return VtableHookStatus::InvalidArgument;
     const auto base = reinterpret_cast<std::uintptr_t>(module);
     config::RuntimeVersion found{};
 
 
     
-    if (!platform.read_runtime_version(path.data(), found)) {
+    if (!platform.readRuntimeVersion(path.data(), found)) {
         LogRuntimeConfiguration(*profile, base, nullptr);
-        ShowRuntimeVersionError(platform, nullptr, profile->expected_runtime_version);
+        ShowRuntimeVersionError(platform, nullptr, profile->expectedRuntimeVersion);
         return VtableHookStatus::RuntimeVersionUnavailable;
     }
     LogRuntimeConfiguration(*profile, base, &found);
     // lets make sure  we don't write some nasty function pointer over an arbitrary address.
-    if (found != profile->expected_runtime_version) {
-        ShowRuntimeVersionError(platform, &found, profile->expected_runtime_version);
+    if (found != profile->expectedRuntimeVersion) {
+        ShowRuntimeVersionError(platform, &found, profile->expectedRuntimeVersion);
         return VtableHookStatus::RuntimeVersionMismatch;
     }
     

@@ -15,7 +15,7 @@ class MovieRootRouteState;
 class MovieRootHookController final {
 public:
     explicit MovieRootHookController(
-        CallbackRegistry& callback_registry,
+        CallbackRegistry& callbackRegistry,
         VtableHookPlatform platform = SystemVtableHookPlatform()) noexcept;
     ~MovieRootHookController();
 
@@ -24,23 +24,23 @@ public:
 
     [[nodiscard]] VtableHookStatus Install(
         const TargetProfile& profile,
-        std::uintptr_t module_base) noexcept;
+        std::uintptr_t moduleBase) noexcept;
     [[nodiscard]] VtableHookStatus Restore() noexcept;
     [[nodiscard]] bool IsActive() const noexcept;
 
 private:
-    CallbackRegistry& callback_registry_;
+    CallbackRegistry& callbackRegistry_;
     VtableHookPlatform platform_;
-    VtableHook vtable_hook_;
-    std::shared_ptr<NativeFunctionHandler> function_handler_;
-    mutable std::mutex lifecycle_mutex_;
-    std::shared_ptr<MovieRootRouteState> route_state_;
+    VtableHook vtableHook_;
+    std::shared_ptr<NativeFunctionHandler> functionHandler_;
+    mutable std::mutex lifecycleMutex_;
+    std::shared_ptr<MovieRootRouteState> routeState_;
 };
 
 [[nodiscard]] bool __fastcall HookedMovieRootGetVariable(
-    void* movie_root,
-    ScaleformValue* out_value,
+    void* movieRoot,
+    ScaleformValue* outValue,
     const char* path,
-    unsigned int caller_r9_scratch = 0U) noexcept;
+    unsigned int callerR9Scratch = 0U) noexcept;
 
 }

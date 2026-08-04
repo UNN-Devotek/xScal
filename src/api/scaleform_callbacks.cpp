@@ -13,6 +13,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <atomic>
 
 namespace sf {
     namespace {
@@ -59,7 +60,7 @@ namespace sf {
             ScaleformCallbackDefinition{"writeCharacterDataFile",     &HandleWriteCharacterDataFile},
         };
         constexpr std::size_t kMaxReturnedFileSize = 0x3FFF;
-        std::atomic<TargetKind> runtime_platform{ TargetKind::Steam };
+        std::atomic<TargetKind> runtimePlatform{ TargetKind::Steam };
 
 
 
@@ -83,7 +84,7 @@ namespace sf {
 
         [[nodiscard]] const char* RuntimePlatformName() noexcept 
         {
-            return TargetKindName(runtime_platform.load(std::memory_order_acquire));
+            return TargetKindName(runtimePlatform.load(std::memory_order_acquire));
         }
         
         [[nodiscard]] bool PrevalidateInputContent(std::string_view payloadContent) noexcept
@@ -192,7 +193,7 @@ namespace sf {
 
             call->result->SetBoolean(false);
 
-            if (call->arguments == nullptr || call->argument_count < 2) {
+            if (call->arguments == nullptr || call->argumentCount < 2) {
                 return true;
             }
 
@@ -312,7 +313,7 @@ namespace sf {
 
             call->result->SetBoolean(false);
 
-            if (call->arguments == nullptr || call->argument_count < 2) {
+            if (call->arguments == nullptr || call->argumentCount < 2) {
                 return true;
             }
 
@@ -330,12 +331,12 @@ namespace sf {
         bool __fastcall HandleGetXScalRuntimeInfo(const ScaleformCall* call, void*) noexcept {
             if (call == nullptr || call->result == nullptr) return false;
             try {
-                std::string runtime_info{ "{\"runtime\":\"xScal\",\"version\":\"" };
-                runtime_info.append(config::kXScalVersion.data(), config::kXScalVersion.size());
-                runtime_info += "\",\"platform\":\"";
-                runtime_info += RuntimePlatformName();
-                runtime_info += "\"}";
-                return call->result->SetString(runtime_info);
+                std::string runtimeInfo{ "{\"runtime\":\"xScal\",\"version\":\"" };
+                runtimeInfo.append(config::kXScalVersion.data(), config::kXScalVersion.size());
+                runtimeInfo += "\",\"platform\":\"";
+                runtimeInfo += RuntimePlatformName();
+                runtimeInfo += "\"}";
+                return call->result->SetString(runtimeInfo);
             }
             catch (...) {
                 return false;
@@ -384,16 +385,16 @@ namespace sf {
 
     // REGISTRATION
     bool RegisterScaleformCallbacks(CallbackRegistry& registry) noexcept {
-        bool registered_all = true;
+        bool registeredAll = true;
         for (const auto& definition : kScaleformCallbackHandlers) {
             if (!registry.Register(definition.name, definition.callback, nullptr)) {
-                registered_all = false;
+                registeredAll = false;
             }
         }
-        return registered_all;
+        return registeredAll;
     }
     void SetScaleformRuntimePlatform(TargetKind kind) noexcept {
-        runtime_platform.store(kind, std::memory_order_release);
+        runtimePlatform.store(kind, std::memory_order_release);
     }
 
 }

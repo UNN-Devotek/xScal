@@ -29,15 +29,15 @@ enum class TargetKind {
 // exposed to hook consumers.
 struct TargetProfile final {
     TargetKind kind;
-    std::wstring_view executable_name;
-    config::RuntimeVersion expected_runtime_version;
-    std::uintptr_t primary_get_variable_slot_offset;
-    std::uintptr_t get_member_offset;
-    std::uintptr_t set_member_offset;
-    std::uintptr_t release_value_offset;
+    std::wstring_view executableName;
+    config::RuntimeVersion expectedRuntimeVersion;
+    std::uintptr_t primaryGetVariableSlotOffset;
+    std::uintptr_t getMemberOffset;
+    std::uintptr_t setMemberOffset;
+    std::uintptr_t releaseValueOffset;
 };
 
 [[nodiscard]] const TargetProfile* SelectTargetProfile(
-    std::wstring_view executable_name) noexcept;
+    std::wstring_view executableName) noexcept;
 
 }

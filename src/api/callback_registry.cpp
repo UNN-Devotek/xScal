@@ -7,14 +7,14 @@ namespace sf {
 bool CallbackRegistry::Register(
     std::string_view name,
     ScaleformCallback callback,
-    void* user_data) noexcept {
+    void* userData) noexcept {
     if (name.empty() || callback == nullptr) {
         return false;
     }
 
     try {
         std::unique_lock lock(mutex_);
-        entries_.insert_or_assign(std::string{name}, Entry{callback, user_data});
+        entries_.insert_or_assign(std::string{name}, Entry{callback, userData});
         return true;
     } catch (...) {
         return false;
@@ -49,7 +49,7 @@ bool CallbackRegistry::Dispatch(std::string_view name, const ScaleformCall& call
             }
             entry = it->second;
         }
-        return entry.callback(&call, entry.user_data);
+        return entry.callback(&call, entry.userData);
     } catch (...) {
         return false;
     }

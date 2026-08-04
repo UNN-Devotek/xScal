@@ -17,17 +17,17 @@ enum class ScaleformResultKind {
 
 struct ScaleformResult final {
     ScaleformResultKind kind{ScaleformResultKind::Undefined};
-    bool boolean_value{};
-    std::string string_value;
+    bool booleanValue{};
+    std::string stringValue;
 
     void SetBoolean(bool value) noexcept {
-        boolean_value = value;
+        booleanValue = value;
         kind = ScaleformResultKind::Boolean;
     }
 
     [[nodiscard]] bool SetString(std::string_view value) noexcept {
         try {
-            string_value.assign(value);
+            stringValue.assign(value);
             kind = ScaleformResultKind::String;
             return true;
         } catch (...) {
@@ -39,25 +39,25 @@ struct ScaleformResult final {
 // Internal view of the recovered ActionScript argument array.
 struct ScaleformCall final {
     const void* arguments{};
-    std::size_t argument_count{};
+    std::size_t argumentCount{};
     ScaleformResult* result{};
 };
 
-using ScaleformCallback = bool(__fastcall*)(const ScaleformCall* call, void* user_data);
+using ScaleformCallback = bool(__fastcall*)(const ScaleformCall* call, void* userData);
 
 class CallbackRegistry final {
 public:
     [[nodiscard]] bool Register(
         std::string_view name,
         ScaleformCallback callback,
-        void* user_data) noexcept;
+        void* userData) noexcept;
     [[nodiscard]] bool Unregister(std::string_view name) noexcept;
     [[nodiscard]] bool Dispatch(std::string_view name, const ScaleformCall& call) const noexcept;
 
 private:
     struct Entry final {
         ScaleformCallback callback{};
-        void* user_data{};
+        void* userData{};
     };
 
     mutable std::shared_mutex mutex_;

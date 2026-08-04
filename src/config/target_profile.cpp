@@ -13,21 +13,21 @@ using config::kSteam;
 constexpr TargetProfile kSteamProfile{
     TargetKind::Steam,
     L"Fallout76.exe",
-    kSteam.runtime_version,
-    kSteam.primary_get_variable_slot,
-    kSteam.get_member,
-    kSteam.set_member,
-    kSteam.release_value,
+    kSteam.runtimeVersion,
+    kSteam.primaryGetVariableSlot,
+    kSteam.getMember,
+    kSteam.setMember,
+    kSteam.releaseValue,
 };
 
 constexpr TargetProfile kGamePassProfile{
     TargetKind::GamePass,
     L"Project76_GamePass.exe",
-    kGamePass.runtime_version,
-    kGamePass.primary_get_variable_slot,
-    kGamePass.get_member,
-    kGamePass.set_member,
-    kGamePass.release_value,
+    kGamePass.runtimeVersion,
+    kGamePass.primaryGetVariableSlot,
+    kGamePass.getMember,
+    kGamePass.setMember,
+    kGamePass.releaseValue,
 };
 
 bool EqualsIgnoreCase(std::wstring_view left, std::wstring_view right) noexcept {
@@ -46,11 +46,11 @@ bool EqualsIgnoreCase(std::wstring_view left, std::wstring_view right) noexcept 
 
 }
 
-const TargetProfile* SelectTargetProfile(std::wstring_view executable_name) noexcept {
-    if (EqualsIgnoreCase(executable_name, kSteamProfile.executable_name)) {
+const TargetProfile* SelectTargetProfile(std::wstring_view executableName) noexcept {
+    if (EqualsIgnoreCase(executableName, kSteamProfile.executableName)) {
         return &kSteamProfile;
     }
-    if (EqualsIgnoreCase(executable_name, kGamePassProfile.executable_name)) {
+    if (EqualsIgnoreCase(executableName, kGamePassProfile.executableName)) {
         return &kGamePassProfile;
     }
     return nullptr;

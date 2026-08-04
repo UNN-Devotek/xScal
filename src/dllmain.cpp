@@ -10,21 +10,21 @@
 
 namespace {
 
-std::atomic<sf::BridgeRuntime*> runtime_instance{};
+std::atomic<sf::BridgeRuntime*> runtimeInstance{};
 
 DWORD WINAPI InitializeBridge(LPVOID) noexcept {
     sf::ClearDiagnosticLog();
 
-    auto& callback_registry = sf::GlobalCallbackRegistry();
-    (void)sf::RegisterScaleformCallbacks(callback_registry);
+    auto& callbackRegistry = sf::GlobalCallbackRegistry();
+    (void)sf::RegisterScaleformCallbacks(callbackRegistry);
 
-    auto* candidate = new (std::nothrow) sf::BridgeRuntime(callback_registry);
+    auto* candidate = new (std::nothrow) sf::BridgeRuntime(callbackRegistry);
     if (candidate == nullptr) {
         return 0;
     }
 
     sf::BridgeRuntime* expected = nullptr;
-    if (!runtime_instance.compare_exchange_strong(
+    if (!runtimeInstance.compare_exchange_strong(
             expected, candidate, std::memory_order_acq_rel, std::memory_order_acquire)) {
         delete candidate;
         return 0;
@@ -46,7 +46,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE module, DWORD reason, LPVOID) noexcept 
             (void)::CloseHandle(thread);
         }
     } else if (reason == DLL_PROCESS_DETACH) {
-        sf::BridgeRuntime* runtime = runtime_instance.load(std::memory_order_acquire);
+        sf::BridgeRuntime* runtime = runtimeInstance.load(std::memory_order_acquire);
         if (runtime != nullptr) {
             (void)runtime->Shutdown();
         }

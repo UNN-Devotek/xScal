@@ -10,7 +10,7 @@
 namespace sf {
 namespace {
 
-std::atomic_size_t attached_root_count{};
+std::atomic_size_t attachedRootCount{};
 
 using CreateObjectRoutine = void(__fastcall*)(
     void*, ScaleformValue*, void*, void*, unsigned int);
@@ -18,16 +18,16 @@ using CreateFunctionRoutine = void(__fastcall*)(
     void*, ScaleformValue*, void*, void*);
 [[nodiscard]] bool IsCreatedObjectValue(const ScaleformValue& value) noexcept {
     const auto info = InspectScaleformValue(value);
-    return (info.raw_type & layout::kTypeMask) == layout::kObjectType &&
-        info.object_interface != nullptr && info.data != nullptr;
+    return (info.rawType & layout::kTypeMask) == layout::kObjectType &&
+        info.objectInterface != nullptr && info.data != nullptr;
 }
 
 
-[[nodiscard]] CreateObjectRoutine GetCreateObjectRoutine(void* movie_root) noexcept {
-    if (movie_root == nullptr) {
+[[nodiscard]] CreateObjectRoutine GetCreateObjectRoutine(void* movieRoot) noexcept {
+    if (movieRoot == nullptr) {
         return nullptr;
     }
-    void* const vtable = *reinterpret_cast<void**>(movie_root);
+    void* const vtable = *reinterpret_cast<void**>(movieRoot);
     if (vtable == nullptr) {
         return nullptr;
     }
@@ -35,11 +35,11 @@ using CreateFunctionRoutine = void(__fastcall*)(
         static_cast<std::byte*>(vtable) + layout::kCreateObjectVtableOffset);
 }
 
-[[nodiscard]] CreateFunctionRoutine GetCreateFunctionRoutine(void* movie_root) noexcept {
-    if (movie_root == nullptr) {
+[[nodiscard]] CreateFunctionRoutine GetCreateFunctionRoutine(void* movieRoot) noexcept {
+    if (movieRoot == nullptr) {
         return nullptr;
     }
-    void* const vtable = *reinterpret_cast<void**>(movie_root);
+    void* const vtable = *reinterpret_cast<void**>(movieRoot);
     if (vtable == nullptr) {
         return nullptr;
     }
@@ -48,13 +48,13 @@ using CreateFunctionRoutine = void(__fastcall*)(
 }
 
 [[nodiscard]] bool AddModuleOffset(
-    std::uintptr_t module_base,
+    std::uintptr_t moduleBase,
     std::uintptr_t offset,
     std::uintptr_t& result) noexcept {
-    if (offset > (std::numeric_limits<std::uintptr_t>::max)() - module_base) {
+    if (offset > (std::numeric_limits<std::uintptr_t>::max)() - moduleBase) {
         return false;
     }
-    result = module_base + offset;
+    result = moduleBase + offset;
     return result != 0;
 }
 
@@ -62,209 +62,209 @@ using CreateFunctionRoutine = void(__fastcall*)(
 
 ResolveScaleformApiStatus ResolveScaleformApi(
     const TargetProfile& profile,
-    std::uintptr_t module_base,
-    platform::VirtualQueryFn virtual_query,
+    std::uintptr_t moduleBase,
+    platform::VirtualQueryFn virtualQuery,
     ResolvedScaleformApi& resolved) noexcept {
     resolved = {};
-    std::uintptr_t get_member{};
-    std::uintptr_t set_member{};
-    std::uintptr_t release_value{};
-    if (!AddModuleOffset(module_base, profile.get_member_offset, get_member) ||
-        !AddModuleOffset(module_base, profile.set_member_offset, set_member) ||
-        !AddModuleOffset(module_base, profile.release_value_offset, release_value)) {
+    std::uintptr_t getMember{};
+    std::uintptr_t setMember{};
+    std::uintptr_t releaseValue{};
+    if (!AddModuleOffset(moduleBase, profile.getMemberOffset, getMember) ||
+        !AddModuleOffset(moduleBase, profile.setMemberOffset, setMember) ||
+        !AddModuleOffset(moduleBase, profile.releaseValueOffset, releaseValue)) {
         return ResolveScaleformApiStatus::AddressOverflow;
     }
-    if (!platform::IsExecutableAddress(virtual_query, reinterpret_cast<void*>(get_member)) ||
-        !platform::IsExecutableAddress(virtual_query, reinterpret_cast<void*>(set_member)) ||
-        !platform::IsExecutableAddress(virtual_query, reinterpret_cast<void*>(release_value))) {
+    if (!platform::IsExecutableAddress(virtualQuery, reinterpret_cast<void*>(getMember)) ||
+        !platform::IsExecutableAddress(virtualQuery, reinterpret_cast<void*>(setMember)) ||
+        !platform::IsExecutableAddress(virtualQuery, reinterpret_cast<void*>(releaseValue))) {
         return ResolveScaleformApiStatus::TargetNotExecutable;
     }
-    resolved.get_member = reinterpret_cast<ScaleformGetMemberRoutine>(get_member);
-    resolved.set_member = reinterpret_cast<ScaleformSetMemberRoutine>(set_member);
-    resolved.release_value = reinterpret_cast<ScaleformReleaseValueRoutine>(release_value);
+    resolved.getMember = reinterpret_cast<ScaleformGetMemberRoutine>(getMember);
+    resolved.setMember = reinterpret_cast<ScaleformSetMemberRoutine>(setMember);
+    resolved.releaseValue = reinterpret_cast<ScaleformReleaseValueRoutine>(releaseValue);
     return ResolveScaleformApiStatus::Resolved;
 }
 
 bool GetScaleformMember(
     const MovieRootContext& context,
     ScaleformValue& object,
-    const char* member_name,
-    ScaleformValue& out_value) noexcept {
-    if (context.api.get_member == nullptr || member_name == nullptr) {
+    const char* memberName,
+    ScaleformValue& outValue) noexcept {
+    if (context.api.getMember == nullptr || memberName == nullptr) {
         return false;
     }
 
     const auto owner = InspectScaleformValue(object);
-    if (owner.object_interface == nullptr || owner.data == nullptr) {
+    if (owner.objectInterface == nullptr || owner.data == nullptr) {
         return false;
     }
 
 
-    return context.api.get_member(
-        owner.object_interface,
+    return context.api.getMember(
+        owner.objectInterface,
         owner.data,
-        member_name,
-        &out_value,
-        (owner.raw_type & layout::kTypeMask) == layout::kDisplayObjectType);
+        memberName,
+        &outValue,
+        (owner.rawType & layout::kTypeMask) == layout::kDisplayObjectType);
 }
 
 bool SetScaleformMember(
     const MovieRootContext& context,
     ScaleformValue& object,
-    const char* member_name,
-    ScaleformValue& member_value) noexcept {
-    if (context.api.set_member == nullptr || member_name == nullptr) {
+    const char* memberName,
+    ScaleformValue& memberValue) noexcept {
+    if (context.api.setMember == nullptr || memberName == nullptr) {
         return false;
     }
 
     const auto owner = InspectScaleformValue(object);
-    if (owner.object_interface == nullptr || owner.data == nullptr) {
+    if (owner.objectInterface == nullptr || owner.data == nullptr) {
         return false;
     }
 
-    const bool is_display_object = (owner.raw_type & layout::kTypeMask) == layout::kDisplayObjectType;
+    const bool isDisplayObject = (owner.rawType & layout::kTypeMask) == layout::kDisplayObjectType;
 
-    if (context.api.set_member(
-            owner.object_interface,
+    if (context.api.setMember(
+            owner.objectInterface,
             owner.data,
-            member_name,
-            &member_value,
-            is_display_object)) {
+            memberName,
+            &memberValue,
+            isDisplayObject)) {
         return true;
     }
-    if (!is_display_object) {
+    if (!isDisplayObject) {
         return false;
     }
 
-    return context.api.set_member(
-        owner.object_interface,
+    return context.api.setMember(
+        owner.objectInterface,
         owner.data,
-        member_name,
-        &member_value,
+        memberName,
+        &memberValue,
         false);
 }
 
 void ReleaseValue(
     const MovieRootContext& context,
     ScaleformValue& value) noexcept {
-    if (context.api.release_value == nullptr) {
+    if (context.api.releaseValue == nullptr) {
         return;
     }
 
     const auto info = InspectScaleformValue(value);
-    if ((info.raw_type & layout::kOwnedValueFlag) == 0 ||
-        info.object_interface == nullptr || info.data == nullptr) {
+    if ((info.rawType & layout::kOwnedValueFlag) == 0 ||
+        info.objectInterface == nullptr || info.data == nullptr) {
         return;
     }
 
-    context.api.release_value(info.object_interface, &value, info.data);
+    context.api.releaseValue(info.objectInterface, &value, info.data);
 }
 
 bool AttachSFCodeObjectToComponent(
     MovieRootContext& context,
     ScaleformValue& component,
-    ScaleformValue& out_bridge) noexcept {
-    if (context.movie_root == nullptr || context.api.get_member == nullptr ||
-        context.api.set_member == nullptr || context.api.release_value == nullptr ||
-        context.function_handler == nullptr) {
+    ScaleformValue& outBridge) noexcept {
+    if (context.movieRoot == nullptr || context.api.getMember == nullptr ||
+        context.api.setMember == nullptr || context.api.releaseValue == nullptr ||
+        context.functionHandler == nullptr) {
         return false;
     }
 
-    const auto create_object = GetCreateObjectRoutine(context.movie_root);
-    const auto create_function = GetCreateFunctionRoutine(context.movie_root);
-    if (create_object == nullptr || create_function == nullptr) {
+    const auto createObject = GetCreateObjectRoutine(context.movieRoot);
+    const auto createFunction = GetCreateFunctionRoutine(context.movieRoot);
+    if (createObject == nullptr || createFunction == nullptr) {
         return false;
     }
 
-    create_object(context.movie_root, &out_bridge, nullptr, nullptr, 0);
-    if (!IsCreatedObjectValue(out_bridge)) {
-        ReleaseValue(context, out_bridge);
+    createObject(context.movieRoot, &outBridge, nullptr, nullptr, 0);
+    if (!IsCreatedObjectValue(outBridge)) {
+        ReleaseValue(context, outBridge);
         return false;
     }
-    ScopedScaleformValue release_bridge_on_failure{context, out_bridge};
+    ScopedScaleformValue releaseBridgeOnFailure{context, outBridge};
 
     ScaleformValue call{};
-    create_function(
-        context.movie_root,
+    createFunction(
+        context.movieRoot,
         &call,
-        context.function_handler->AsScaleformHandler(),
+        context.functionHandler->AsScaleformHandler(),
         nullptr);
     if (!IsCreatedObjectValue(call)) {
         ReleaseValue(context, call);
         return false;
     }
-    ScopedScaleformValue release_call{context, call};
+    ScopedScaleformValue releaseCall{context, call};
 
-    if (!SetScaleformMember(context, out_bridge, "call", call)) {
+    if (!SetScaleformMember(context, outBridge, "call", call)) {
         return false;
     }
 
-    ScaleformValue call_readback{};
-    const bool call_readable = GetScaleformMember(context, out_bridge, "call", call_readback);
-    const bool call_object_like =
-        call_readable && IsObjectLikeScaleformValue(call_readback);
-    ScopedScaleformValue release_call_readback{context, call_readback};
-    if (!call_object_like) {
+    ScaleformValue callReadback{};
+    const bool callReadable = GetScaleformMember(context, outBridge, "call", callReadback);
+    const bool callObjectLike =
+        callReadable && IsObjectLikeScaleformValue(callReadback);
+    ScopedScaleformValue releaseCallReadback{context, callReadback};
+    if (!callObjectLike) {
         return false;
     }
-    DiagnosticLog("xScal: successfully attached call");
+    DiagnosticLog("xScal: attached call");
 
-    if (!SetScaleformMember(context, component, "__SFCodeObj", out_bridge)) {
+    if (!SetScaleformMember(context, component, "__SFCodeObj", outBridge)) {
         return false;
     }
 
-    ScaleformValue bridge_readback{};
-    const bool bridge_readable =
-        GetScaleformMember(context, component, "__SFCodeObj", bridge_readback);
-    const bool bridge_object_like =
-        bridge_readable && IsObjectLikeScaleformValue(bridge_readback);
-    ScopedScaleformValue release_bridge_readback{context, bridge_readback};
-    if (!bridge_object_like) {
+    ScaleformValue bridgeReadback{};
+    const bool bridgeReadable =
+        GetScaleformMember(context, component, "__SFCodeObj", bridgeReadback);
+    const bool bridgeObjectLike =
+        bridgeReadable && IsObjectLikeScaleformValue(bridgeReadback);
+    ScopedScaleformValue releaseBridgeReadback{context, bridgeReadback};
+    if (!bridgeObjectLike) {
         return false;
     }
-    const std::size_t root_number =
-        attached_root_count.fetch_add(1, std::memory_order_relaxed) + 1;
+    const std::size_t rootNumber =
+        attachedRootCount.fetch_add(1, std::memory_order_relaxed) + 1;
     DiagnosticLogFormat(
-        "xScal: successfully attached root object #%zu. Thank Todd!",
-        root_number);
+        "xScal: attached root object #%zu to movieRoot. Thanks Todd!",
+        rootNumber);
 
-    release_bridge_on_failure.Dismiss();
+    releaseBridgeOnFailure.Dismiss();
     return true;
 }
 
 bool AttachSFCodeObjectToRoot(
     MovieRootContext& context,
-    ScaleformValue& out_bridge) noexcept {
-    if (context.movie_root == nullptr || context.original_get_variable == nullptr) {
+    ScaleformValue& outBridge) noexcept {
+    if (context.movieRoot == nullptr || context.originalGetVariable == nullptr) {
         return false;
     }
 
     ScaleformValue root{};
-    if (!context.original_get_variable(context.movie_root, &root, "root1", 0U)) {
+    if (!context.originalGetVariable(context.movieRoot, &root, "root1", 0U)) {
         ReleaseValue(context, root);
         return false;
     }
-    ScopedScaleformValue release_root{context, root};
-    return AttachSFCodeObjectToComponent(context, root, out_bridge);
+    ScopedScaleformValue releaseRoot{context, root};
+    return AttachSFCodeObjectToComponent(context, root, outBridge);
 }
 bool CreateNativeCallFunction(
     MovieRootContext& context,
-    ScaleformValue& out_function) noexcept {
-    if (context.movie_root == nullptr || context.function_handler == nullptr) {
+    ScaleformValue& outFunction) noexcept {
+    if (context.movieRoot == nullptr || context.functionHandler == nullptr) {
         return false;
     }
-    const auto create_function = GetCreateFunctionRoutine(context.movie_root);
-    if (create_function == nullptr) {
+    const auto createFunction = GetCreateFunctionRoutine(context.movieRoot);
+    if (createFunction == nullptr) {
         return false;
     }
-    create_function(
-        context.movie_root,
-        &out_function,
-        context.function_handler->AsScaleformHandler(),
+    createFunction(
+        context.movieRoot,
+        &outFunction,
+        context.functionHandler->AsScaleformHandler(),
         nullptr);
-    if (!IsCreatedObjectValue(out_function)) {
-        ReleaseValue(context, out_function);
-        out_function = {};
+    if (!IsCreatedObjectValue(outFunction)) {
+        ReleaseValue(context, outFunction);
+        outFunction = {};
         return false;
     }
     return true;

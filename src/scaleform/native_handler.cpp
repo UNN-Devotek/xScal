@@ -12,7 +12,7 @@
 namespace sf {
 namespace {
 
-thread_local char return_string_buffer[layout::kReturnStringBufferSize]{};
+thread_local char returnStringBuffer[layout::kReturnStringBufferSize]{};
 
 
 template <typename T>
@@ -22,39 +22,39 @@ template <typename T>
     return result;
 }
 
-[[nodiscard]] bool WriteBooleanResult(void* raw_result, bool boolean_value) noexcept {
-    if (raw_result == nullptr) {
+[[nodiscard]] bool WriteBooleanResult(void* rawResult, bool booleanValue) noexcept {
+    if (rawResult == nullptr) {
         return false;
     }
 
     std::byte value[sizeof(ScaleformValue)]{};
     constexpr std::uint64_t kBooleanType = layout::kBooleanType;
-    const std::uint64_t encoded_value = boolean_value ? 1 : 0;
+    const std::uint64_t encodedValue = booleanValue ? 1 : 0;
     std::memcpy(value + layout::kValueTypeOffset, &kBooleanType, sizeof(kBooleanType));
-    std::memcpy(value + layout::kValueInternalTwoOffset, &encoded_value, sizeof(encoded_value));
-    std::memcpy(raw_result, value, sizeof(value));
+    std::memcpy(value + layout::kValueInternalTwoOffset, &encodedValue, sizeof(encodedValue));
+    std::memcpy(rawResult, value, sizeof(value));
     return true;
 }
 
 [[nodiscard]] bool WriteStringResult(
-    void* raw_result,
+    void* rawResult,
     const char* text,
-    std::size_t text_length) noexcept {
-    if (raw_result == nullptr || text == nullptr) {
+    std::size_t textLength) noexcept {
+    if (rawResult == nullptr || text == nullptr) {
         return false;
     }
 
-    const std::size_t copied_length =
-        text_length < layout::kMaxReturnStringLength ? text_length : layout::kMaxReturnStringLength;
-    std::memcpy(return_string_buffer, text, copied_length);
-    return_string_buffer[copied_length] = '\0';
+    const std::size_t copiedLength =
+        textLength < layout::kMaxReturnStringLength ? textLength : layout::kMaxReturnStringLength;
+    std::memcpy(returnStringBuffer, text, copiedLength);
+    returnStringBuffer[copiedLength] = '\0';
 
     std::byte value[sizeof(ScaleformValue)]{};
     constexpr std::uint64_t kStringType = layout::kStringType;
-    const char* const value_text = return_string_buffer;
+    const char* const valueText = returnStringBuffer;
     std::memcpy(value + layout::kValueTypeOffset, &kStringType, sizeof(kStringType));
-    std::memcpy(value + layout::kValueInternalTwoOffset, &value_text, sizeof(value_text));
-    std::memcpy(raw_result, value, sizeof(value));
+    std::memcpy(value + layout::kValueInternalTwoOffset, &valueText, sizeof(valueText));
+    std::memcpy(rawResult, value, sizeof(value));
     return true;
 }
 
@@ -77,8 +77,8 @@ template <typename T>
 [[nodiscard]] bool GetReadableSpanEnd(
     const char* current,
     std::size_t remaining,
-    const char*& span_end) noexcept {
-    return platform::GetReadableSpanEnd(&::VirtualQuery, current, remaining, span_end);
+    const char*& spanEnd) noexcept {
+    return platform::GetReadableSpanEnd(&::VirtualQuery, current, remaining, spanEnd);
 }
 [[nodiscard]] bool IsUtf8Continuation(unsigned char value) noexcept {
     return value >= 0x80 && value <= 0xBF;
@@ -174,20 +174,20 @@ template <typename T>
 }
 
 [[nodiscard]] bool DecodeStringCandidate(
-    std::uint64_t encoded_type,
-    const void* encoded_pointer,
-    std::string_view& decoded_string) noexcept {
-    if ((static_cast<unsigned char>(encoded_type) & layout::kTypeMask) != 6 || encoded_pointer == nullptr) {
+    std::uint64_t encodedType,
+    const void* encodedPointer,
+    std::string_view& decodedString) noexcept {
+    if ((static_cast<unsigned char>(encodedType) & layout::kTypeMask) != 6 || encodedPointer == nullptr) {
         return false;
     }
 
-    const char* text = static_cast<const char*>(encoded_pointer);
-    if ((static_cast<unsigned char>(encoded_type) & layout::kOwnedValueFlag) != 0) {
-        const auto pointer_bits = reinterpret_cast<std::uintptr_t>(encoded_pointer);
-        if ((pointer_bits & 7) != 0 || !IsReadableRange(encoded_pointer, sizeof(const char*))) {
+    const char* text = static_cast<const char*>(encodedPointer);
+    if ((static_cast<unsigned char>(encodedType) & layout::kOwnedValueFlag) != 0) {
+        const auto pointerBits = reinterpret_cast<std::uintptr_t>(encodedPointer);
+        if ((pointerBits & 7) != 0 || !IsReadableRange(encodedPointer, sizeof(const char*))) {
             return false;
         }
-        std::memcpy(&text, encoded_pointer, sizeof(text));
+        std::memcpy(&text, encodedPointer, sizeof(text));
     }
 
     if (text == nullptr) {
@@ -195,10 +195,10 @@ template <typename T>
     }
 
     const char* current = text;
-    const char* readable_end = nullptr;
+    const char* readableEnd = nullptr;
     for (std::size_t index = 0; index < layout::kMaxScaleformStringLength; ++index) {
-        if (current == readable_end &&
-            !GetReadableSpanEnd(current, layout::kMaxScaleformStringLength - index, readable_end)) {
+        if (current == readableEnd &&
+            !GetReadableSpanEnd(current, layout::kMaxScaleformStringLength - index, readableEnd)) {
             return false;
         }
         const unsigned char value = static_cast<unsigned char>(*current);
@@ -208,7 +208,7 @@ template <typename T>
             if (!IsStrictUtf8(candidate)) {
                 return false;
             }
-            decoded_string = candidate;
+            decodedString = candidate;
             return true;
         }
         if (!IsScaleformStringByteAllowed(value)) {
@@ -231,28 +231,28 @@ ScaleformValueInfo InspectScaleformValue(const ScaleformValue& value) noexcept {
 
 bool IsObjectLikeScaleformValue(const ScaleformValue& value) noexcept {
     const auto info = InspectScaleformValue(value);
-    const auto base_type = static_cast<std::uint8_t>(info.raw_type & layout::kTypeMask);
-    return base_type >= 8 && base_type <= 10 &&
-        info.object_interface != nullptr && info.data != nullptr;
+    const auto baseType = static_cast<std::uint8_t>(info.rawType & layout::kTypeMask);
+    return baseType >= 8 && baseType <= 10 &&
+        info.objectInterface != nullptr && info.data != nullptr;
 }
 
-NativeFunctionHandler::NativeFunctionHandler(CallbackRegistry& callback_registry) noexcept
+NativeFunctionHandler::NativeFunctionHandler(CallbackRegistry& callbackRegistry) noexcept
     : vtable_{nullptr},
-      reference_count_{1},
-      reference_count_padding_{0} {
+      referenceCount_{1},
+      referenceCountPadding_{0} {
     static_assert(offsetof(NativeFunctionHandler, vtable_) == 0x00);
-    static_assert(offsetof(NativeFunctionHandler, reference_count_) == 0x08);
-    static_assert(offsetof(NativeFunctionHandler, reference_count_padding_) == 0x0C);
+    static_assert(offsetof(NativeFunctionHandler, referenceCount_) == 0x08);
+    static_assert(offsetof(NativeFunctionHandler, referenceCountPadding_) == 0x0C);
     static_assert(sizeof(NativeFunctionHandler) == 0x10);
     static const HandlerVtableEntry kVtable[] = {
         reinterpret_cast<HandlerVtableEntry>(&NativeFunctionHandler::Identity),
         reinterpret_cast<HandlerVtableEntry>(&NativeFunctionHandler::Invoke),
     };
     vtable_ = kVtable;
-    callback_registry_ = &callback_registry;
+    callbackRegistry_ = &callbackRegistry;
 }
 
-CallbackRegistry* NativeFunctionHandler::callback_registry_ = nullptr;
+CallbackRegistry* NativeFunctionHandler::callbackRegistry_ = nullptr;
 
 void* __fastcall NativeFunctionHandler::Identity(void* handler) noexcept {
     return handler;
@@ -261,54 +261,54 @@ void* __fastcall NativeFunctionHandler::Identity(void* handler) noexcept {
 void __fastcall NativeFunctionHandler::Invoke(
     void* handler,
     const FunctionParams* params) noexcept {
-    if (handler == nullptr || callback_registry_ == nullptr ||
-        params == nullptr || params->arguments == nullptr || params->argument_count == 0) {
+    if (handler == nullptr || callbackRegistry_ == nullptr ||
+        params == nullptr || params->arguments == nullptr || params->argumentCount == 0) {
         return;
     }
 
-    std::string_view callback_name;
-    if (!TryDecodeScaleformString(params->arguments, callback_name)) {
+    std::string_view callbackName;
+    if (!TryDecodeScaleformString(params->arguments, callbackName)) {
         return;
     }
 
-    ScaleformResult callback_result;
+    ScaleformResult callbackResult;
     const ScaleformCall call{
         params->arguments,
-        params->argument_count,
-        &callback_result,
+        params->argumentCount,
+        &callbackResult,
     };
-    if (!callback_registry_->Dispatch(callback_name, call)) {
+    if (!callbackRegistry_->Dispatch(callbackName, call)) {
         return;
     }
-    if (callback_result.kind == ScaleformResultKind::Boolean) {
-        (void)WriteBooleanResult(params->result, callback_result.boolean_value);
-    } else if (callback_result.kind == ScaleformResultKind::String) {
+    if (callbackResult.kind == ScaleformResultKind::Boolean) {
+        (void)WriteBooleanResult(params->result, callbackResult.booleanValue);
+    } else if (callbackResult.kind == ScaleformResultKind::String) {
         (void)WriteStringResult(
             params->result,
-            callback_result.string_value.data(),
-            callback_result.string_value.size());
+            callbackResult.stringValue.data(),
+            callbackResult.stringValue.size());
     }
 }
 
 bool TryDecodeScaleformString(
-    const std::byte* argument_record,
-    std::string_view& decoded_string) noexcept {
-    decoded_string = {};
-    if (argument_record == nullptr) {
+    const std::byte* argumentRecord,
+    std::string_view& decodedString) noexcept {
+    decodedString = {};
+    if (argumentRecord == nullptr) {
         return false;
     }
 
     // 0x18015086F passes +0x18/+0x20 as the preferred pair to 0x180145E30;
     // the helper retries +0x08/+0x10 when the preferred pair is not a string.
-    const auto primary_type = ReadArgumentValue<std::uint64_t>(argument_record, layout::kPrimaryArgumentTypeOffset);
-    const auto primary_pointer = ReadArgumentValue<const void*>(argument_record, layout::kPrimaryArgumentPointerOffset);
-    if (DecodeStringCandidate(primary_type, primary_pointer, decoded_string)) {
+    const auto primaryType = ReadArgumentValue<std::uint64_t>(argumentRecord, layout::kPrimaryArgumentTypeOffset);
+    const auto primaryPointer = ReadArgumentValue<const void*>(argumentRecord, layout::kPrimaryArgumentPointerOffset);
+    if (DecodeStringCandidate(primaryType, primaryPointer, decodedString)) {
         return true;
     }
 
-    const auto fallback_type = ReadArgumentValue<std::uint64_t>(argument_record, layout::kFallbackArgumentTypeOffset);
-    const auto fallback_pointer = ReadArgumentValue<const void*>(argument_record, layout::kFallbackArgumentPointerOffset);
-    return DecodeStringCandidate(fallback_type, fallback_pointer, decoded_string);
+    const auto fallbackType = ReadArgumentValue<std::uint64_t>(argumentRecord, layout::kFallbackArgumentTypeOffset);
+    const auto fallbackPointer = ReadArgumentValue<const void*>(argumentRecord, layout::kFallbackArgumentPointerOffset);
+    return DecodeStringCandidate(fallbackType, fallbackPointer, decodedString);
 }
 
 
@@ -316,15 +316,15 @@ bool TryDecodeScaleformString(
 
 bool TryGetScaleformStringArgument(
     const ScaleformCall& call,
-    std::size_t argument_index,
-    std::string_view& decoded_string) noexcept {
-    decoded_string = {};
-    if (call.arguments == nullptr || argument_index >= call.argument_count ||
-        argument_index > (std::numeric_limits<std::size_t>::max)() / layout::kFunctionArgumentSize) {
+    std::size_t argumentIndex,
+    std::string_view& decodedString) noexcept {
+    decodedString = {};
+    if (call.arguments == nullptr || argumentIndex >= call.argumentCount ||
+        argumentIndex > (std::numeric_limits<std::size_t>::max)() / layout::kFunctionArgumentSize) {
         return false;
     }
     const auto* arguments = static_cast<const std::byte*>(call.arguments);
     return TryDecodeScaleformString(
-        arguments + argument_index * layout::kFunctionArgumentSize,
-        decoded_string);
+        arguments + argumentIndex * layout::kFunctionArgumentSize,
+        decodedString);
 }}

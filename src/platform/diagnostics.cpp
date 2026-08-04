@@ -8,17 +8,17 @@
 namespace sf {
 namespace {
 
-HMODULE diagnostic_module = nullptr;
-SRWLOCK diagnostic_lock = SRWLOCK_INIT;
-ULONGLONG diagnostic_baseline_tick{};
-ULONGLONG diagnostic_baseline_elapsed_ms{};
+HMODULE diagnosticModule = nullptr;
+SRWLOCK diagnosticLock = SRWLOCK_INIT;
+ULONGLONG diagnosticBaselineTick{};
+ULONGLONG diagnosticBaselineElapsedMs{};
 
 bool BuildLogPath(std::array<wchar_t, 32768>& path) noexcept {
-    if (diagnostic_module == nullptr) {
+    if (diagnosticModule == nullptr) {
         return false;
     }
     const DWORD length = ::GetModuleFileNameW(
-        diagnostic_module, path.data(), static_cast<DWORD>(path.size()));
+        diagnosticModule, path.data(), static_cast<DWORD>(path.size()));
     if (length == 0 || length >= path.size()) {
         return false;
     }
@@ -27,8 +27,8 @@ bool BuildLogPath(std::array<wchar_t, 32768>& path) noexcept {
         --separator;
     }
     constexpr wchar_t filename[] = L"xscal.log";
-    constexpr std::size_t filename_length = (sizeof(filename) / sizeof(filename[0])) - 1;
-    if (separator + filename_length >= path.size()) {
+    constexpr std::size_t filenameLength = (sizeof(filename) / sizeof(filename[0])) - 1;
+    if (separator + filenameLength >= path.size()) {
         return false;
     }
     std::memcpy(path.data() + separator, filename, sizeof(filename));
@@ -38,30 +38,30 @@ bool BuildLogPath(std::array<wchar_t, 32768>& path) noexcept {
 }
 
 void SetDiagnosticModule(HMODULE module) noexcept {
-    diagnostic_module = module;
-    diagnostic_baseline_tick = ::GetTickCount64();
-    diagnostic_baseline_elapsed_ms = 0;
+    diagnosticModule = module;
+    diagnosticBaselineTick = ::GetTickCount64();
+    diagnosticBaselineElapsedMs = 0;
 
-    FILETIME creation_time{};
-    FILETIME exit_time{};
-    FILETIME kernel_time{};
-    FILETIME user_time{};
-    FILETIME current_time{};
+    FILETIME creationTime{};
+    FILETIME exitTime{};
+    FILETIME kernelTime{};
+    FILETIME userTime{};
+    FILETIME currentTime{};
     if (::GetProcessTimes(
             ::GetCurrentProcess(),
-            &creation_time,
-            &exit_time,
-            &kernel_time,
-            &user_time) != FALSE) {
-        ::GetSystemTimeAsFileTime(&current_time);
+            &creationTime,
+            &exitTime,
+            &kernelTime,
+            &userTime) != FALSE) {
+        ::GetSystemTimeAsFileTime(&currentTime);
         ULARGE_INTEGER creation{};
-        creation.LowPart = creation_time.dwLowDateTime;
-        creation.HighPart = creation_time.dwHighDateTime;
+        creation.LowPart = creationTime.dwLowDateTime;
+        creation.HighPart = creationTime.dwHighDateTime;
         ULARGE_INTEGER current{};
-        current.LowPart = current_time.dwLowDateTime;
-        current.HighPart = current_time.dwHighDateTime;
+        current.LowPart = currentTime.dwLowDateTime;
+        current.HighPart = currentTime.dwHighDateTime;
         if (current.QuadPart >= creation.QuadPart) {
-            diagnostic_baseline_elapsed_ms =
+            diagnosticBaselineElapsedMs =
                 (current.QuadPart - creation.QuadPart) / 10000ULL;
         }
     }
@@ -73,7 +73,7 @@ void ClearDiagnosticLog() noexcept {
         return;
     }
 
-    if (::TryAcquireSRWLockExclusive(&diagnostic_lock) == FALSE) {
+    if (::TryAcquireSRWLockExclusive(&diagnosticLock) == FALSE) {
         return;
     }
     HANDLE file = ::CreateFileW(
@@ -87,7 +87,7 @@ void ClearDiagnosticLog() noexcept {
     if (file != INVALID_HANDLE_VALUE) {
         (void)::CloseHandle(file);
     }
-    ::ReleaseSRWLockExclusive(&diagnostic_lock);
+    ::ReleaseSRWLockExclusive(&diagnosticLock);
 }
 
 void DiagnosticLog(const char* message) noexcept {
@@ -101,13 +101,13 @@ void DiagnosticLog(const char* message) noexcept {
     }
 
     char line[1024]{};
-    const ULONGLONG elapsed_ms = diagnostic_baseline_elapsed_ms +
-        (::GetTickCount64() - diagnostic_baseline_tick);
-    const ULONGLONG hours = elapsed_ms / 3600000ULL;
-    const ULONGLONG minutes = (elapsed_ms / 60000ULL) % 60ULL;
-    const ULONGLONG seconds = (elapsed_ms / 1000ULL) % 60ULL;
-    const ULONGLONG milliseconds = elapsed_ms % 1000ULL;
-    const int prefix_length = std::snprintf(
+    const ULONGLONG elapsedMs = diagnosticBaselineElapsedMs +
+        (::GetTickCount64() - diagnosticBaselineTick);
+    const ULONGLONG hours = elapsedMs / 3600000ULL;
+    const ULONGLONG minutes = (elapsedMs / 60000ULL) % 60ULL;
+    const ULONGLONG seconds = (elapsedMs / 1000ULL) % 60ULL;
+    const ULONGLONG milliseconds = elapsedMs % 1000ULL;
+    const int prefixLength = std::snprintf(
         line,
         sizeof(line),
         "[%02llu:%02llu:%02llu.%03llu] ",
@@ -115,17 +115,17 @@ void DiagnosticLog(const char* message) noexcept {
         static_cast<unsigned long long>(minutes),
         static_cast<unsigned long long>(seconds),
         static_cast<unsigned long long>(milliseconds));
-    if (prefix_length <= 0 || static_cast<std::size_t>(prefix_length) >= sizeof(line)) {
+    if (prefixLength <= 0 || static_cast<std::size_t>(prefixLength) >= sizeof(line)) {
         return;
     }
-    const std::size_t available = sizeof(line) - static_cast<std::size_t>(prefix_length) - 3;
-    const std::size_t message_length = strnlen(message, available);
-    std::memcpy(line + prefix_length, message, message_length);
-    std::size_t line_length = static_cast<std::size_t>(prefix_length) + message_length;
-    line[line_length++] = '\r';
-    line[line_length++] = '\n';
+    const std::size_t available = sizeof(line) - static_cast<std::size_t>(prefixLength) - 3;
+    const std::size_t messageLength = strnlen(message, available);
+    std::memcpy(line + prefixLength, message, messageLength);
+    std::size_t lineLength = static_cast<std::size_t>(prefixLength) + messageLength;
+    line[lineLength++] = '\r';
+    line[lineLength++] = '\n';
 
-    if (::TryAcquireSRWLockExclusive(&diagnostic_lock) == FALSE) {
+    if (::TryAcquireSRWLockExclusive(&diagnosticLock) == FALSE) {
         return;
     }
     HANDLE file = ::CreateFileW(
@@ -138,10 +138,10 @@ void DiagnosticLog(const char* message) noexcept {
         nullptr);
     if (file != INVALID_HANDLE_VALUE) {
         DWORD written{};
-        (void)::WriteFile(file, line, static_cast<DWORD>(line_length), &written, nullptr);
+        (void)::WriteFile(file, line, static_cast<DWORD>(lineLength), &written, nullptr);
         (void)::CloseHandle(file);
     }
-    ::ReleaseSRWLockExclusive(&diagnostic_lock);
+    ::ReleaseSRWLockExclusive(&diagnosticLock);
 }
 
 void DiagnosticLogFormat(const char* format, ...) noexcept {

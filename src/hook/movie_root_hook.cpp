@@ -12,461 +12,737 @@
 #include <utility>
 #include <vector>
 
-namespace sf {
-namespace {
+namespace sf
+{
+    namespace
+    {
 
-std::mutex active_route_mutex;
-std::shared_ptr<MovieRootRouteState> active_route_state;
-std::atomic<MovieRootGetVariable> fallback_original{};
-thread_local bool inside_movie_root_hook = false;
-class RecursionGuard final {
-public:
-    RecursionGuard() noexcept { inside_movie_root_hook = true; }
-    ~RecursionGuard() { inside_movie_root_hook = false; }
-};
+        std::mutex activeRouteMutex;
+        std::shared_ptr<MovieRootRouteState> activeRouteState;
+        std::atomic<MovieRootGetVariable> fallbackOriginal{};
+        thread_local bool insideMovieRootHook = false;
+        class RecursionGuard final
+        {
+        public:
+            RecursionGuard() noexcept { insideMovieRootHook = true; }
+            ~RecursionGuard() { insideMovieRootHook = false; }
+        };
 
-[[nodiscard]] bool IsReadableMovieRoot(
-    const VtableHookPlatform& platform,
-    const void* movie_root) noexcept {
-    if (movie_root == nullptr || platform.virtual_query == nullptr) {
-        return false;
-    }
-    MEMORY_BASIC_INFORMATION memory{};
-    if (platform.virtual_query(movie_root, &memory, sizeof(memory)) == 0 ||
-        memory.State != MEM_COMMIT || !platform::IsReadableProtection(memory.Protect)) {
-        return false;
-    }
-    const auto region_base = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
-    const auto address = reinterpret_cast<std::uintptr_t>(movie_root);
-    return address >= region_base && memory.RegionSize >= sizeof(void*) &&
-        address - region_base <= memory.RegionSize - sizeof(void*);
-}
-
-[[nodiscard]] bool TryReadPath(
-    const VtableHookPlatform& platform,
-    const char* path,
-    std::string_view& result) noexcept {
-    constexpr std::size_t kMaxPathLength = 4096;
-    result = {};
-    if (path == nullptr || platform.virtual_query == nullptr) {
-        return false;
-    }
-
-    const auto start = reinterpret_cast<std::uintptr_t>(path);
-    std::uintptr_t current = start;
-    std::size_t length = 0;
-    while (length < kMaxPathLength) {
-        MEMORY_BASIC_INFORMATION memory{};
-        if (platform.virtual_query(
-                reinterpret_cast<const void*>(current), &memory, sizeof(memory)) == 0 ||
-            memory.State != MEM_COMMIT || !platform::IsReadableProtection(memory.Protect)) {
-            return false;
-        }
-        const auto region_base = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
-        if (memory.RegionSize > (std::numeric_limits<std::uintptr_t>::max)() - region_base) {
-            return false;
-        }
-        const auto region_end = region_base + memory.RegionSize;
-        if (current < region_base || current >= region_end) {
-            return false;
+        [[nodiscard]] bool IsReadableMovieRoot(
+            const VtableHookPlatform &platform,
+            const void *movieRoot) noexcept
+        {
+            if (movieRoot == nullptr || platform.virtualQuery == nullptr)
+            {
+                return false;
+            }
+            MEMORY_BASIC_INFORMATION memory{};
+            if (platform.virtualQuery(movieRoot, &memory, sizeof(memory)) == 0 ||
+                memory.State != MEM_COMMIT || !platform::IsReadableProtection(memory.Protect))
+            {
+                return false;
+            }
+            const auto regionBase = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
+            const auto address = reinterpret_cast<std::uintptr_t>(movieRoot);
+            return address >= regionBase && memory.RegionSize >= sizeof(void *) &&
+                   address - regionBase <= memory.RegionSize - sizeof(void *);
         }
 
-        const std::size_t readable = std::min<std::size_t>(
-            static_cast<std::size_t>(region_end - current),
-            kMaxPathLength - length);
-        const auto* bytes = reinterpret_cast<const char*>(current);
-        for (std::size_t index = 0; index < readable; ++index) {
-            if (bytes[index] == '\0') {
-                result = std::string_view{path, length + index};
-                return !result.empty();
+        [[nodiscard]] bool TryReadPath(
+            const VtableHookPlatform &platform,
+            const char *path,
+            std::string_view &result) noexcept
+        {
+            constexpr std::size_t kMaxPathLength = 4096;
+            result = {};
+            if (path == nullptr || platform.virtualQuery == nullptr)
+            {
+                return false;
+            }
+
+            const auto start = reinterpret_cast<std::uintptr_t>(path);
+            std::uintptr_t current = start;
+            std::size_t length = 0;
+            while (length < kMaxPathLength)
+            {
+                MEMORY_BASIC_INFORMATION memory{};
+                if (platform.virtualQuery(
+                        reinterpret_cast<const void *>(current), &memory, sizeof(memory)) == 0 ||
+                    memory.State != MEM_COMMIT || !platform::IsReadableProtection(memory.Protect))
+                {
+                    return false;
+                }
+                const auto regionBase = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
+                if (memory.RegionSize > (std::numeric_limits<std::uintptr_t>::max)() - regionBase)
+                {
+                    return false;
+                }
+                const auto regionEnd = regionBase + memory.RegionSize;
+                if (current < regionBase || current >= regionEnd)
+                {
+                    return false;
+                }
+
+                const std::size_t readable = std::min<std::size_t>(
+                    static_cast<std::size_t>(regionEnd - current),
+                    kMaxPathLength - length);
+                const auto *bytes = reinterpret_cast<const char *>(current);
+                for (std::size_t index = 0; index < readable; ++index)
+                {
+                    if (bytes[index] == '\0')
+                    {
+                        result = std::string_view{path, length + index};
+                        return !result.empty();
+                    }
+                }
+                current += readable;
+                length += readable;
+            }
+            return false;
+        }
+        [[nodiscard]] bool ReadPreparedOriginal(
+            const VtableHookPlatform &platform,
+            const TargetProfile &profile,
+            std::uintptr_t moduleBase,
+            MovieRootGetVariable &original,
+            void *&expectedVtable,
+            VtableHookStatus &failure) noexcept
+        {
+            if (platform.virtualQuery == nullptr)
+            {
+                failure = VtableHookStatus::InvalidPlatform;
+                return false;
+            }
+            if (profile.primaryGetVariableSlotOffset < layout::kGetVariableVtableOffset ||
+                profile.primaryGetVariableSlotOffset >
+                    (std::numeric_limits<std::uintptr_t>::max)() - moduleBase)
+            {
+                failure = profile.primaryGetVariableSlotOffset < layout::kGetVariableVtableOffset
+                              ? VtableHookStatus::InvalidArgument
+                              : VtableHookStatus::AddressOverflow;
+                return false;
+            }
+
+            const auto slotAddress = moduleBase + profile.primaryGetVariableSlotOffset;
+            if ((slotAddress % alignof(void *)) != 0)
+            {
+                failure = VtableHookStatus::SlotUnaligned;
+                return false;
+            }
+
+            MEMORY_BASIC_INFORMATION memory{};
+            if (platform.virtualQuery(reinterpret_cast<const void *>(slotAddress), &memory, sizeof(memory)) == 0 ||
+                memory.State != MEM_COMMIT || !platform::IsReadableProtection(memory.Protect))
+            {
+                failure = VtableHookStatus::SlotNotReadable;
+                return false;
+            }
+            const auto regionBase = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
+            if (slotAddress < regionBase || memory.RegionSize < sizeof(void *) ||
+                slotAddress - regionBase > memory.RegionSize - sizeof(void *))
+            {
+                failure = VtableHookStatus::SlotNotReadable;
+                return false;
+            }
+
+            void *rawOriginal{};
+            std::memcpy(&rawOriginal, reinterpret_cast<const void *>(slotAddress), sizeof(rawOriginal));
+            if (rawOriginal == nullptr)
+            {
+                failure = VtableHookStatus::OriginalNotExecutable;
+                return false;
+            }
+            original = reinterpret_cast<MovieRootGetVariable>(rawOriginal);
+            expectedVtable = reinterpret_cast<void *>(slotAddress - layout::kGetVariableVtableOffset);
+            return true;
+        }
+
+        [[nodiscard]] bool IsObjectReadback(
+            bool readable,
+            const ScaleformValue &value) noexcept
+        {
+            return readable && IsObjectLikeScaleformValue(value);
+        }
+
+        // fix for .call members not being present in some of the swf's.
+        [[nodiscard]] bool EnsureNativeCallMember(
+            MovieRootContext &context,
+            ScaleformValue &bridge) noexcept
+        {
+            ScaleformValue existingCall{};
+
+            const bool existingCallReadable =
+                GetScaleformMember(
+                    context,
+                    bridge,
+                    "call",
+                    existingCall);
+
+            const bool existingCallUsable =
+                IsObjectReadback(
+                    existingCallReadable,
+                    existingCall);
+
+            ReleaseValue(context, existingCall);
+
+            if (existingCallUsable)
+            {
+                return true;
+            }
+
+            ScaleformValue nativeCall{};
+
+            if (!CreateNativeCallFunction(context, nativeCall))
+            {
+                return false;
+            }
+
+            const bool callAttached =
+                SetScaleformMember(
+                    context,
+                    bridge,
+                    "call",
+                    nativeCall);
+
+            ScaleformValue attachedCall{};
+
+            const bool attachedCallReadable =
+                callAttached &&
+                GetScaleformMember(
+                    context,
+                    bridge,
+                    "call",
+                    attachedCall);
+
+            const bool attachedCallUsable =
+                IsObjectReadback(
+                    attachedCallReadable,
+                    attachedCall);
+
+            ReleaseValue(context, attachedCall);
+            ReleaseValue(context, nativeCall);
+
+            return attachedCallUsable;
+        }
+    }
+
+    class MovieRootRouteState final
+    {
+    public:
+        MovieRootRouteState(
+            std::shared_ptr<NativeFunctionHandler> functionHandler,
+            VtableHookPlatform platform,
+            MovieRootGetVariable original,
+            void *expectedVtable,
+            ResolvedScaleformApi api) noexcept
+            : platform_(platform),
+              functionHandler_(std::move(functionHandler)),
+              original_(original),
+              expectedVtable_(expectedVtable),
+              api_(api) {}
+
+        [[nodiscard]] bool Route(
+            void *movieRoot,
+            ScaleformValue *outValue,
+            const char *path,
+            unsigned int callerR9Scratch) noexcept;
+
+    private:
+        [[nodiscard]] bool EnsureBridge(void *movieRoot) noexcept;
+        [[nodiscard]] bool HasBridgeForMovieRoot(void *movieRoot) const noexcept;
+        [[nodiscard]] bool RepairComponent(void *movieRoot, ScaleformValue &component) noexcept;
+        void RememberBridgeForMovieRoot(void *movieRoot) noexcept;
+
+        VtableHookPlatform platform_;
+        std::shared_ptr<NativeFunctionHandler> functionHandler_;
+        std::mutex bridgeMutex_;
+        MovieRootGetVariable original_{};
+        void *expectedVtable_{};
+        ResolvedScaleformApi api_{};
+        std::vector<void *> bridgedMovieRoots_;
+    };
+
+    MovieRootHookController::MovieRootHookController(
+        CallbackRegistry &callbackRegistry,
+        VtableHookPlatform platform) noexcept
+        : callbackRegistry_(callbackRegistry),
+          platform_(platform),
+          vtableHook_(platform)
+    {
+        try
+        {
+            functionHandler_ = std::make_shared<NativeFunctionHandler>(callbackRegistry);
+        }
+        catch (...)
+        {
+        }
+    }
+
+    MovieRootHookController::~MovieRootHookController()
+    {
+        VtableHookStatus status = VtableHookStatus::NotActive;
+        for (unsigned int attempt = 0; attempt < 3; ++attempt)
+        {
+            status = Restore();
+            if (!vtableHook_.IsActive() && status != VtableHookStatus::ProtectionRestoreFailed)
+            {
+                break;
             }
         }
-        current += readable;
-        length += readable;
-    }
-    return false;
-}
-[[nodiscard]] bool ReadPreparedOriginal(
-    const VtableHookPlatform& platform,
-    const TargetProfile& profile,
-    std::uintptr_t module_base,
-    MovieRootGetVariable& original,
-    void*& expected_vtable,
-    VtableHookStatus& failure) noexcept {
-    if (platform.virtual_query == nullptr) {
-        failure = VtableHookStatus::InvalidPlatform;
-        return false;
-    }
-    if (profile.primary_get_variable_slot_offset < layout::kGetVariableVtableOffset ||
-        profile.primary_get_variable_slot_offset >
-            (std::numeric_limits<std::uintptr_t>::max)() - module_base) {
-        failure = profile.primary_get_variable_slot_offset < layout::kGetVariableVtableOffset
-            ? VtableHookStatus::InvalidArgument
-            : VtableHookStatus::AddressOverflow;
-        return false;
-    }
 
-    const auto slot_address = module_base + profile.primary_get_variable_slot_offset;
-    if ((slot_address % alignof(void*)) != 0) {
-        failure = VtableHookStatus::SlotUnaligned;
-        return false;
-    }
-
-    MEMORY_BASIC_INFORMATION memory{};
-    if (platform.virtual_query(reinterpret_cast<const void*>(slot_address), &memory, sizeof(memory)) == 0 ||
-        memory.State != MEM_COMMIT || !platform::IsReadableProtection(memory.Protect)) {
-        failure = VtableHookStatus::SlotNotReadable;
-        return false;
-    }
-    const auto region_base = reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
-    if (slot_address < region_base || memory.RegionSize < sizeof(void*) ||
-        slot_address - region_base > memory.RegionSize - sizeof(void*)) {
-        failure = VtableHookStatus::SlotNotReadable;
-        return false;
-    }
-
-    void* raw_original{};
-    std::memcpy(&raw_original, reinterpret_cast<const void*>(slot_address), sizeof(raw_original));
-    if (raw_original == nullptr) {
-        failure = VtableHookStatus::OriginalNotExecutable;
-        return false;
-    }
-    original = reinterpret_cast<MovieRootGetVariable>(raw_original);
-    expected_vtable = reinterpret_cast<void*>(slot_address - layout::kGetVariableVtableOffset);
-    return true;
-}
-
-[[nodiscard]] bool IsObjectReadback(
-    bool readable,
-    const ScaleformValue& value) noexcept {
-    return readable && IsObjectLikeScaleformValue(value);
-}
-
-}
-
-class MovieRootRouteState final {
-public:
-    MovieRootRouteState(
-        std::shared_ptr<NativeFunctionHandler> function_handler,
-        VtableHookPlatform platform,
-        MovieRootGetVariable original,
-        void* expected_vtable,
-        ResolvedScaleformApi api) noexcept
-        : platform_(platform),
-          function_handler_(std::move(function_handler)),
-          original_(original),
-          expected_vtable_(expected_vtable),
-          api_(api) {}
-
-    [[nodiscard]] bool Route(
-        void* movie_root,
-        ScaleformValue* out_value,
-        const char* path,
-        unsigned int caller_r9_scratch) noexcept;
-
-private:
-    [[nodiscard]] bool EnsureBridge(void* movie_root) noexcept;
-    [[nodiscard]] bool HasBridgeForMovieRoot(void* movie_root) const noexcept;
-    void RememberBridgeForMovieRoot(void* movie_root) noexcept;
-
-    VtableHookPlatform platform_;
-    std::shared_ptr<NativeFunctionHandler> function_handler_;
-    std::mutex bridge_mutex_;
-    MovieRootGetVariable original_{};
-    void* expected_vtable_{};
-    ResolvedScaleformApi api_{};
-    std::vector<void*> bridged_movie_roots_;
-};
-
-MovieRootHookController::MovieRootHookController(
-    CallbackRegistry& callback_registry,
-    VtableHookPlatform platform) noexcept
-    : callback_registry_(callback_registry),
-      platform_(platform),
-      vtable_hook_(platform) {
-    try {
-        function_handler_ = std::make_shared<NativeFunctionHandler>(callback_registry);
-    } catch (...) {
-    }
-}
-
-MovieRootHookController::~MovieRootHookController() {
-    VtableHookStatus status = VtableHookStatus::NotActive;
-    for (unsigned int attempt = 0; attempt < 3; ++attempt) {
-        status = Restore();
-        if (!vtable_hook_.IsActive() && status != VtableHookStatus::ProtectionRestoreFailed) {
-            break;
+        {
+            std::scoped_lock activeLock{activeRouteMutex};
+            if (activeRouteState == routeState_)
+            {
+                activeRouteState.reset();
+                fallbackOriginal.store(nullptr, std::memory_order_release);
+            }
         }
+        routeState_.reset();
     }
 
+    VtableHookStatus MovieRootHookController::Install(
+        const TargetProfile &profile,
+        std::uintptr_t moduleBase) noexcept
     {
-        std::scoped_lock active_lock{active_route_mutex};
-        if (active_route_state == route_state_) {
-            active_route_state.reset();
-            fallback_original.store(nullptr, std::memory_order_release);
-        }
-    }
-    route_state_.reset();
-}
-
-VtableHookStatus MovieRootHookController::Install(
-    const TargetProfile& profile,
-    std::uintptr_t module_base) noexcept {
-    std::scoped_lock lock{lifecycle_mutex_};
-    if (vtable_hook_.IsActive()) {
-        return VtableHookStatus::AlreadyActive;
-    }
-
-    MovieRootGetVariable prepared_original{};
-    void* prepared_vtable{};
-    VtableHookStatus failure{};
-    if (!ReadPreparedOriginal(
-            platform_, profile, module_base, prepared_original, prepared_vtable, failure)) {
-        return failure;
-    }
-
-    ResolvedScaleformApi prepared_api{};
-    const auto api_status = ResolveScaleformApi(
-        profile, module_base, platform_.virtual_query, prepared_api);
-    if (api_status == ResolveScaleformApiStatus::AddressOverflow) {
-        return VtableHookStatus::AddressOverflow;
-    }
-    if (api_status != ResolveScaleformApiStatus::Resolved) {
-        return VtableHookStatus::TargetRoutineNotExecutable;
-    }
-
-    if (function_handler_ == nullptr) {
-        return VtableHookStatus::AllocationFailed;
-    }
-
-    std::shared_ptr<MovieRootRouteState> candidate;
-    try {
-        candidate = std::make_shared<MovieRootRouteState>(
-            function_handler_, platform_, prepared_original, prepared_vtable, prepared_api);
-    } catch (...) {
-        return VtableHookStatus::AllocationFailed;
-    }
-
-    {
-        std::scoped_lock active_lock{active_route_mutex};
-        if (active_route_state != nullptr) {
+        std::scoped_lock lock{lifecycleMutex_};
+        if (vtableHook_.IsActive())
+        {
             return VtableHookStatus::AlreadyActive;
         }
-        active_route_state = candidate;
-        fallback_original.store(prepared_original, std::memory_order_release);
+
+        MovieRootGetVariable preparedOriginal{};
+        void *preparedVtable{};
+        VtableHookStatus failure{};
+        if (!ReadPreparedOriginal(
+                platform_, profile, moduleBase, preparedOriginal, preparedVtable, failure))
+        {
+            return failure;
+        }
+
+        ResolvedScaleformApi preparedApi{};
+        const auto apiStatus = ResolveScaleformApi(
+            profile, moduleBase, platform_.virtualQuery, preparedApi);
+        if (apiStatus == ResolveScaleformApiStatus::AddressOverflow)
+        {
+            return VtableHookStatus::AddressOverflow;
+        }
+        if (apiStatus != ResolveScaleformApiStatus::Resolved)
+        {
+            return VtableHookStatus::TargetRoutineNotExecutable;
+        }
+
+        if (functionHandler_ == nullptr)
+        {
+            return VtableHookStatus::AllocationFailed;
+        }
+
+        std::shared_ptr<MovieRootRouteState> candidate;
+        try
+        {
+            candidate = std::make_shared<MovieRootRouteState>(
+                functionHandler_, platform_, preparedOriginal, preparedVtable, preparedApi);
+        }
+        catch (...)
+        {
+            return VtableHookStatus::AllocationFailed;
+        }
+
+        {
+            std::scoped_lock activeLock{activeRouteMutex};
+            if (activeRouteState != nullptr)
+            {
+                return VtableHookStatus::AlreadyActive;
+            }
+            activeRouteState = candidate;
+            fallbackOriginal.store(preparedOriginal, std::memory_order_release);
+        }
+
+        const auto status = vtableHook_.Install(profile, moduleBase, &HookedMovieRootGetVariable);
+        if (status != VtableHookStatus::Installed)
+        {
+            std::scoped_lock activeLock{activeRouteMutex};
+            if (activeRouteState == candidate)
+            {
+                activeRouteState.reset();
+                fallbackOriginal.store(nullptr, std::memory_order_release);
+            }
+            return status;
+        }
+
+        routeState_ = candidate;
+        return status;
     }
 
-    const auto status = vtable_hook_.Install(profile, module_base, &HookedMovieRootGetVariable);
-    if (status != VtableHookStatus::Installed) {
-        std::scoped_lock active_lock{active_route_mutex};
-        if (active_route_state == candidate) {
-            active_route_state.reset();
-            fallback_original.store(nullptr, std::memory_order_release);
+    VtableHookStatus MovieRootHookController::Restore() noexcept
+    {
+        std::scoped_lock lock{lifecycleMutex_};
+        const auto status = vtableHook_.Restore();
+        if (!vtableHook_.IsActive())
+        {
+            {
+                std::scoped_lock activeLock{activeRouteMutex};
+                if (activeRouteState == routeState_)
+                {
+                    activeRouteState.reset();
+                    fallbackOriginal.store(nullptr, std::memory_order_release);
+                }
+            }
+            routeState_.reset();
         }
         return status;
     }
 
-    route_state_ = candidate;
-    return status;
-}
+    bool MovieRootHookController::IsActive() const noexcept
+    {
+        return vtableHook_.IsActive();
+    }
 
-VtableHookStatus MovieRootHookController::Restore() noexcept {
-    std::scoped_lock lock{lifecycle_mutex_};
-    const auto status = vtable_hook_.Restore();
-    if (!vtable_hook_.IsActive()) {
+    bool MovieRootRouteState::HasBridgeForMovieRoot(void *movieRoot) const noexcept
+    {
+        return std::find(
+                   bridgedMovieRoots_.begin(), bridgedMovieRoots_.end(), movieRoot) !=
+               bridgedMovieRoots_.end();
+    }
+
+    void MovieRootRouteState::RememberBridgeForMovieRoot(void *movieRoot) noexcept
+    {
+        /* cache must be revalidated
+        if (HasBridgeForMovieRoot(movieRoot))
         {
-            std::scoped_lock active_lock{active_route_mutex};
-            if (active_route_state == route_state_) {
-                active_route_state.reset();
-                fallback_original.store(nullptr, std::memory_order_release);
-            }
+            return;
         }
-        route_state_.reset();
-    }
-    return status;
-}
-
-bool MovieRootHookController::IsActive() const noexcept {
-    return vtable_hook_.IsActive();
-}
-
-bool MovieRootRouteState::HasBridgeForMovieRoot(void* movie_root) const noexcept {
-    return std::find(
-        bridged_movie_roots_.begin(), bridged_movie_roots_.end(), movie_root) !=
-        bridged_movie_roots_.end();
-}
-
-void MovieRootRouteState::RememberBridgeForMovieRoot(void* movie_root) noexcept {
-    if (HasBridgeForMovieRoot(movie_root)) {
-        return;
-    }
-    try {
-        bridged_movie_roots_.push_back(movie_root);
-    } catch (...) {
-    }
-}
-
-bool MovieRootRouteState::EnsureBridge(void* movie_root) noexcept {
-    std::unique_lock lock{bridge_mutex_, std::try_to_lock};
-    if (!lock.owns_lock()) {
-        return false;
-    }
-    if (HasBridgeForMovieRoot(movie_root)) {
-        return true;
-    }
-    const auto original = original_;
-    if (api_.get_member == nullptr || original == nullptr) {
-        return false;
-    }
-
-    MovieRootContext context{
-        movie_root,
-        original,
-        api_,
-        function_handler_.get(),
-    };
-    ScaleformValue existing{};
-    const bool existing_readable =
-        original(movie_root, &existing, "root1.__SFCodeObj", 0U);
-    const bool existing_object = IsObjectReadback(existing_readable, existing);
-    if (existing_object) {
-        ScaleformValue existing_call{};
-        const bool existing_call_readable =
-            GetScaleformMember(context, existing, "call", existing_call);
-        const bool existing_call_object = IsObjectReadback(existing_call_readable,
-            existing_call);
-        ReleaseValue(context, existing_call);
-        if (existing_call_object) {
-            ReleaseValue(context, existing);
-            RememberBridgeForMovieRoot(movie_root);
-            return true;
+        */
+        try
+        {
+            bridgedMovieRoots_.push_back(movieRoot);
         }
+        catch (...)
+        {
+        }
+    }
 
-        ScaleformValue native_call{};
-        if (!CreateNativeCallFunction(context, native_call)) {
-            ReleaseValue(context, existing);
+    bool MovieRootRouteState::EnsureBridge(
+        void *movieRoot) noexcept
+    {
+        std::unique_lock lock{
+            bridgeMutex_,
+            std::try_to_lock,
+        };
+
+        if (!lock.owns_lock())
+        {
             return false;
         }
-        const bool call_attached = SetScaleformMember(context, existing, "call", native_call);
-        ScaleformValue attached_call{};
-        const bool attached_call_readable =
-            call_attached && GetScaleformMember(context, existing, "call", attached_call);
-        const bool attached_call_object = IsObjectReadback(attached_call_readable,
-            attached_call);
-        ReleaseValue(context, attached_call);
-        ReleaseValue(context, native_call);
-        ReleaseValue(context, existing);
-        if (attached_call_object) {
-            DiagnosticLog("xScal: successfully attached call");
-            RememberBridgeForMovieRoot(movie_root);
+
+        const auto original = original_;
+
+        if (movieRoot == nullptr ||
+            api_.getMember == nullptr ||
+            original == nullptr)
+        {
+            return false;
         }
-        return attached_call_object;
-    }
-    ReleaseValue(context, existing);
 
-    ScaleformValue bridge{};
-    if (!AttachSFCodeObjectToRoot(context, bridge)) {
-        return false;
-    }
-    ScaleformValue inserted_call{};
-    const bool inserted_call_readable =
-        original(movie_root, &inserted_call, "root1.__SFCodeObj.call", 0U);
-    const bool inserted_call_object = IsObjectReadback(inserted_call_readable,
-        inserted_call);
-    ReleaseValue(context, inserted_call);
-    ReleaseValue(context, bridge);
-    if (inserted_call_object) {
-        RememberBridgeForMovieRoot(movie_root);
-    }
-    return inserted_call_object;
-}
-
-bool MovieRootRouteState::Route(
-    void* movie_root,
-    ScaleformValue* out_value,
-    const char* path,
-    unsigned int caller_r9_scratch) noexcept {
-    const auto original = original_;
-    const auto expected_vtable = expected_vtable_;
-    if (movie_root == nullptr || out_value == nullptr || path == nullptr ||
-        original == nullptr || expected_vtable == nullptr) {
-        return false;
-    }
-    if (!IsReadableMovieRoot(platform_, movie_root)) {
-        return false;
-    }
-
-    void* incoming_vtable{};
-    std::memcpy(&incoming_vtable, movie_root, sizeof(incoming_vtable));
-    if (incoming_vtable != expected_vtable) {
-        return false;
-    }
-    if (inside_movie_root_hook) {
-        return original(movie_root, out_value, path, caller_r9_scratch);
-    }
-
-    RecursionGuard recursion_guard;
-    const bool original_result =
-        original(movie_root, out_value, path, caller_r9_scratch);
-    std::string_view requested_path;
-    if (!TryReadPath(platform_, path, requested_path)) {
-        return original_result;
-    }
-
-    const bool direct_call = routing::IsDirectCallAlias(requested_path);
-    const bool object_alias = routing::IsObjectAlias(requested_path);
-    if (original_result && routing::ShouldEnsureRootBridge(requested_path)) {
-        (void)EnsureBridge(movie_root);
-    }
-    if (!direct_call && !object_alias) {
-        return original_result;
-    }
-    if (direct_call) {
         MovieRootContext context{
-            movie_root,
+            movieRoot,
             original,
             api_,
-            function_handler_.get(),
+            functionHandler_.get(),
         };
-        ScaleformValue native_call{};
-        if (!CreateNativeCallFunction(context, native_call)) {
-            return original_result;
-        }
-        ReleaseValue(context, *out_value);
-        *out_value = native_call;
-        native_call = {};
-        return true;
-    }
-    if (original_result) {
-        return true;
-    }
-    if (!EnsureBridge(movie_root)) {
-        return false;
-    }
-    if (original(movie_root, out_value, path, caller_r9_scratch)) {
-        return true;
-    }
-    return requested_path != "root1.__SFCodeObj" &&
-        original(movie_root, out_value, "root1.__SFCodeObj", 0U);
-}
 
-bool __fastcall HookedMovieRootGetVariable(
-    void* movie_root,
-    ScaleformValue* out_value,
-    const char* path,
-    unsigned int caller_r9_scratch) noexcept {
-    std::shared_ptr<MovieRootRouteState> route_state;
-    {
-        std::unique_lock active_lock{active_route_mutex, std::try_to_lock};
-        if (!active_lock.owns_lock()) {
-            const auto original = fallback_original.load(std::memory_order_acquire);
-            return original != nullptr &&
-                original(movie_root, out_value, path, caller_r9_scratch);
+        // MovieRoot addresses can be reused. Do not trust the pointer cache
+        // without confirming that this root still has a usable call member.
+        if (HasBridgeForMovieRoot(movieRoot))
+        {
+            ScaleformValue cachedCall{};
+
+            const bool cachedCallReadable = original(
+                movieRoot,
+                &cachedCall,
+                "root1.__SFCodeObj.call",
+                0U);
+
+            const bool cachedCallUsable =
+                IsObjectReadback(
+                    cachedCallReadable,
+                    cachedCall);
+
+            ReleaseValue(context, cachedCall);
+
+            if (cachedCallUsable)
+            {
+                return true;
+            }
+
+            DiagnosticLogFormat(
+                "xScal: no idea how, but cached MovieRoot %p lost __SFCodeObj.call; repairing",
+                movieRoot);
         }
-        route_state = active_route_state;
+
+        // The object may already exist while call is missing.
+        ScaleformValue existingBridge{};
+
+        const bool existingBridgeReadable = original(
+            movieRoot,
+            &existingBridge,
+            "root1.__SFCodeObj",
+            0U);
+
+        const bool existingBridgeUsable =
+            IsObjectReadback(
+                existingBridgeReadable,
+                existingBridge);
+
+        if (existingBridgeUsable)
+        {
+            const bool callReady =
+                EnsureNativeCallMember(
+                    context,
+                    existingBridge);
+
+            ReleaseValue(context, existingBridge);
+
+            if (callReady)
+            {
+                RememberBridgeForMovieRoot(movieRoot);
+
+                DiagnosticLogFormat(
+                    "xScal: verified __SFCodeObj.call on MovieRoot %p",
+                    movieRoot);
+            }
+
+            return callReady;
+        }
+
+        ReleaseValue(context, existingBridge);
+
+        // no existing bridge, make and attach a copmlete object.
+        ScaleformValue newBridge{};
+
+        if (!AttachSFCodeObjectToRoot(
+                context,
+                newBridge))
+        {
+            return false;
+        }
+
+        // check thru the MovieRoot lookup path.
+        ScaleformValue insertedCall{};
+
+        const bool insertedCallReadable = original(
+            movieRoot,
+            &insertedCall,
+            "root1.__SFCodeObj.call",
+            0U);
+
+        const bool insertedCallUsable =
+            IsObjectReadback(
+                insertedCallReadable,
+                insertedCall);
+
+        ReleaseValue(context, insertedCall);
+        ReleaseValue(context, newBridge);
+
+        if (insertedCallUsable)
+        {
+            RememberBridgeForMovieRoot(movieRoot);
+        }
+
+        return insertedCallUsable;
     }
-    return route_state != nullptr &&
-        route_state->Route(movie_root, out_value, path, caller_r9_scratch);
-}
+
+      bool MovieRootRouteState::RepairComponent(
+        void* movieRoot,
+        ScaleformValue& component) noexcept {
+        std::unique_lock lock{
+            bridgeMutex_,
+            std::try_to_lock,
+        };
+
+        if (!lock.owns_lock()) {
+            return false;
+        }
+
+        const auto original = original_;
+
+        if (movieRoot == nullptr ||
+            original == nullptr ||
+            api_.getMember == nullptr) {
+            return false;
+        }
+
+        MovieRootContext context{
+            movieRoot,
+            original,
+            api_,
+            functionHandler_.get(),
+        };
+
+        ScaleformValue existingBridge{};
+
+        const bool bridgeReadable =
+            GetScaleformMember(
+                context,
+                component,
+                "__SFCodeObj",
+                existingBridge);
+
+        const bool bridgeUsable =
+            IsObjectReadback(
+                bridgeReadable,
+                existingBridge);
+
+        if (!bridgeUsable) {
+            ReleaseValue(context, existingBridge);
+            return false;
+        }
+
+        // Keep the existing object and add only the missing call member.
+        const bool callReady =
+            EnsureNativeCallMember(
+                context,
+                existingBridge);
+
+        ReleaseValue(context, existingBridge);
+
+        if (callReady) {
+            DiagnosticLogFormat(
+                "xScal: repaired component __SFCodeObj.call on MovieRoot %p",
+                movieRoot);
+        }
+
+        return callReady;
+    }
+
+    bool MovieRootRouteState::Route(
+        void *movieRoot,
+        ScaleformValue *outValue,
+        const char *path,
+        unsigned int callerR9Scratch) noexcept
+    {
+        const auto original = original_;
+        const auto expectedVtable = expectedVtable_;
+        if (movieRoot == nullptr || outValue == nullptr || path == nullptr ||
+            original == nullptr || expectedVtable == nullptr)
+        {
+            return false;
+        }
+        if (!IsReadableMovieRoot(platform_, movieRoot))
+        {
+            return false;
+        }
+
+        void *incomingVtable{};
+        std::memcpy(&incomingVtable, movieRoot, sizeof(incomingVtable));
+        if (incomingVtable != expectedVtable)
+        {
+            return false;
+        }
+        if (insideMovieRootHook)
+        {
+            return original(movieRoot, outValue, path, callerR9Scratch);
+        }
+
+        RecursionGuard recursionGuard;
+        const bool originalResult =
+            original(movieRoot, outValue, path, callerR9Scratch);
+        std::string_view requestedPath;
+        if (!TryReadPath(platform_, path, requestedPath))
+        {
+            return originalResult;
+        }
+
+        const bool directCall = routing::IsDirectCallAlias(requestedPath);
+        const bool objectAlias = routing::IsObjectAlias(requestedPath);
+        if (originalResult &&
+            routing::ShouldEnsureRootBridge(requestedPath)) {
+            (void)EnsureBridge(movieRoot);
+
+            if (requestedPath != "root1") {
+                (void)RepairComponent(
+                    movieRoot,
+                    *outValue);
+            }
+        }
+        if (!directCall && !objectAlias)
+        {
+            return originalResult;
+        }
+        if (directCall)
+        {
+            MovieRootContext context{
+                movieRoot,
+                original,
+                api_,
+                functionHandler_.get(),
+            };
+            ScaleformValue nativeCall{};
+            if (!CreateNativeCallFunction(context, nativeCall))
+            {
+                return originalResult;
+            }
+            ReleaseValue(context, *outValue);
+            *outValue = nativeCall;
+            nativeCall = {};
+            return true;
+        }
+        if (originalResult) {
+            std::unique_lock lock{
+                bridgeMutex_,
+                std::try_to_lock,
+            };
+
+            if (lock.owns_lock()) {
+                MovieRootContext context{
+                    movieRoot,
+                    original,
+                    api_,
+                    functionHandler_.get(),
+                };
+
+                if (EnsureNativeCallMember(
+                        context,
+                        *outValue)) {
+                    DiagnosticLogFormat(
+                        "xScal: new __SFCodeObj.call on MovieRoot %p",
+                        movieRoot);
+                }
+            }
+
+            return true;
+        }
+        if (!EnsureBridge(movieRoot))
+        {
+            return false;
+        }
+        if (original(movieRoot, outValue, path, callerR9Scratch))
+        {
+            return true;
+        }
+        return requestedPath != "root1.__SFCodeObj" &&
+               original(movieRoot, outValue, "root1.__SFCodeObj", 0U);
+    }
+
+    bool __fastcall HookedMovieRootGetVariable(
+        void *movieRoot,
+        ScaleformValue *outValue,
+        const char *path,
+        unsigned int callerR9Scratch) noexcept
+    {
+        std::shared_ptr<MovieRootRouteState> routeState;
+        {
+            std::unique_lock activeLock{activeRouteMutex, std::try_to_lock};
+            if (!activeLock.owns_lock())
+            {
+                const auto original = fallbackOriginal.load(std::memory_order_acquire);
+                return original != nullptr &&
+                       original(movieRoot, outValue, path, callerR9Scratch);
+            }
+            routeState = activeRouteState;
+        }
+        return routeState != nullptr &&
+               routeState->Route(movieRoot, outValue, path, callerR9Scratch);
+    }
 
 }

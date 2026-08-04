@@ -36,17 +36,17 @@ VtableHookPlatform SystemVtableHookPlatform() noexcept {
 VtableHook::VtableHook(VtableHookPlatform platform) noexcept : platform_(platform) {}
 
 bool VtableHook::HasCompletePlatform() const noexcept {
-    return platform_.virtual_query != nullptr
-        && platform_.virtual_protect != nullptr
-        && platform_.exchange_pointer != nullptr
-        && platform_.compare_exchange_pointer != nullptr
-        && platform_.flush_instruction_cache != nullptr
-        && platform_.get_current_process != nullptr;
+    return platform_.virtualQuery != nullptr
+        && platform_.virtualProtect != nullptr
+        && platform_.exchangePointer != nullptr
+        && platform_.compareExchangePointer != nullptr
+        && platform_.flushInstructionCache != nullptr
+        && platform_.getCurrentProcess != nullptr;
 }
 
 bool VtableHook::IsReadableSlot(void* slot) const noexcept {
     MEMORY_BASIC_INFORMATION memory{};
-    return platform_.virtual_query(slot, &memory, sizeof(memory)) != 0
+    return platform_.virtualQuery(slot, &memory, sizeof(memory)) != 0
         && memory.State == MEM_COMMIT
         && platform::RegionContains(memory, slot, sizeof(void*))
         && platform::IsReadableProtection(memory.Protect);
@@ -58,24 +58,24 @@ bool VtableHook::IsExecutableTarget(void* target) const noexcept {
     }
 
     MEMORY_BASIC_INFORMATION memory{};
-    return platform_.virtual_query(target, &memory, sizeof(memory)) != 0
+    return platform_.virtualQuery(target, &memory, sizeof(memory)) != 0
         && memory.State == MEM_COMMIT
         && platform::IsExecutableProtection(memory.Protect);
 }
 
-bool VtableHook::RestoreProtection(void* slot, DWORD old_protection) const noexcept {
+bool VtableHook::RestoreProtection(void* slot, DWORD oldProtection) const noexcept {
     DWORD ignored{};
-    return platform_.virtual_protect(slot, sizeof(void*), old_protection, &ignored) != FALSE;
+    return platform_.virtualProtect(slot, sizeof(void*), oldProtection, &ignored) != FALSE;
 }
 
 void VtableHook::BeginProtectionRecovery(
-    void** slot, DWORD old_protection, VtableHookStatus terminal_result) noexcept {
+    void** slot, DWORD oldProtection, VtableHookStatus terminalResult) noexcept {
     state_ = State::ProtectionRecovery;
     slot_ = slot;
     original_ = nullptr;
     hook_ = nullptr;
-    recovery_old_protection_ = old_protection;
-    recovery_result_ = terminal_result;
+    recoveryOldProtection_ = oldProtection;
+    recoveryResult_ = terminalResult;
 }
 
 void VtableHook::Clear() noexcept {
@@ -83,13 +83,13 @@ void VtableHook::Clear() noexcept {
     slot_ = nullptr;
     original_ = nullptr;
     hook_ = nullptr;
-    recovery_old_protection_ = 0;
-    recovery_result_ = VtableHookStatus::NotActive;
+    recoveryOldProtection_ = 0;
+    recoveryResult_ = VtableHookStatus::NotActive;
 }
 
 VtableHookStatus VtableHook::Install(
     const TargetProfile& profile,
-    std::uintptr_t module_base,
+    std::uintptr_t moduleBase,
     MovieRootGetVariable hook) noexcept {
     std::scoped_lock lock{mutex_};
     if (state_ != State::Inactive) {
@@ -99,79 +99,79 @@ VtableHookStatus VtableHook::Install(
         return HasCompletePlatform() ? VtableHookStatus::InvalidArgument
                                      : VtableHookStatus::InvalidPlatform;
     }
-    if (profile.primary_get_variable_slot_offset
-        > (std::numeric_limits<std::uintptr_t>::max)() - module_base) {
+    if (profile.primaryGetVariableSlotOffset
+        > (std::numeric_limits<std::uintptr_t>::max)() - moduleBase) {
         return VtableHookStatus::AddressOverflow;
     }
 
-    const auto slot_value = module_base + profile.primary_get_variable_slot_offset;
-    if ((slot_value % alignof(void*)) != 0) {
+    const auto slotValue = moduleBase + profile.primaryGetVariableSlotOffset;
+    if ((slotValue % alignof(void*)) != 0) {
         return VtableHookStatus::SlotUnaligned;
     }
-    auto* slot = reinterpret_cast<void**>(slot_value);
+    auto* slot = reinterpret_cast<void**>(slotValue);
     if (!IsReadableSlot(slot)) {
         return VtableHookStatus::SlotNotReadable;
     }
 
-    const auto raw_hook = reinterpret_cast<void*>(hook);
-    void* observed_original = *reinterpret_cast<void* volatile*>(slot);
-    if (observed_original == raw_hook) {
+    const auto rawHook = reinterpret_cast<void*>(hook);
+    void* observedOriginal = *reinterpret_cast<void* volatile*>(slot);
+    if (observedOriginal == rawHook) {
         return VtableHookStatus::AlreadyActive;
     }
-    if (!IsExecutableTarget(observed_original)) {
+    if (!IsExecutableTarget(observedOriginal)) {
         return VtableHookStatus::OriginalNotExecutable;
     }
 
-    DWORD old_protection{};
-    if (platform_.virtual_protect(slot, sizeof(void*), PAGE_READWRITE, &old_protection) == FALSE) {
+    DWORD oldProtection{};
+    if (platform_.virtualProtect(slot, sizeof(void*), PAGE_READWRITE, &oldProtection) == FALSE) {
         return VtableHookStatus::ProtectFailed;
     }
 
-    observed_original = platform_.exchange_pointer(
-        reinterpret_cast<PVOID volatile*>(slot), raw_hook);
-    if (observed_original == raw_hook) {
-        if (!RestoreProtection(slot, old_protection)) {
-            BeginProtectionRecovery(slot, old_protection, VtableHookStatus::AlreadyActive);
+    observedOriginal = platform_.exchangePointer(
+        reinterpret_cast<PVOID volatile*>(slot), rawHook);
+    if (observedOriginal == rawHook) {
+        if (!RestoreProtection(slot, oldProtection)) {
+            BeginProtectionRecovery(slot, oldProtection, VtableHookStatus::AlreadyActive);
             return VtableHookStatus::ProtectionRestoreFailed;
         }
         return VtableHookStatus::AlreadyActive;
     }
-    if (!IsExecutableTarget(observed_original)) {
-        platform_.compare_exchange_pointer(
-            reinterpret_cast<PVOID volatile*>(slot), observed_original, raw_hook);
-        if (!RestoreProtection(slot, old_protection)) {
+    if (!IsExecutableTarget(observedOriginal)) {
+        platform_.compareExchangePointer(
+            reinterpret_cast<PVOID volatile*>(slot), observedOriginal, rawHook);
+        if (!RestoreProtection(slot, oldProtection)) {
             BeginProtectionRecovery(
-                slot, old_protection, VtableHookStatus::OriginalNotExecutable);
+                slot, oldProtection, VtableHookStatus::OriginalNotExecutable);
             return VtableHookStatus::ProtectionRestoreFailed;
         }
         return VtableHookStatus::OriginalNotExecutable;
     }
 
-    if (platform_.flush_instruction_cache(
-            platform_.get_current_process(), slot, sizeof(void*)) == FALSE) {
-        platform_.compare_exchange_pointer(
-            reinterpret_cast<PVOID volatile*>(slot), observed_original, raw_hook);
-        if (!RestoreProtection(slot, old_protection)) {
-            BeginProtectionRecovery(slot, old_protection, VtableHookStatus::FlushFailed);
+    if (platform_.flushInstructionCache(
+            platform_.getCurrentProcess(), slot, sizeof(void*)) == FALSE) {
+        platform_.compareExchangePointer(
+            reinterpret_cast<PVOID volatile*>(slot), observedOriginal, rawHook);
+        if (!RestoreProtection(slot, oldProtection)) {
+            BeginProtectionRecovery(slot, oldProtection, VtableHookStatus::FlushFailed);
             return VtableHookStatus::ProtectionRestoreFailed;
         }
         return VtableHookStatus::FlushFailed;
     }
 
-    if (!RestoreProtection(slot, old_protection)) {
-        platform_.compare_exchange_pointer(
-            reinterpret_cast<PVOID volatile*>(slot), observed_original, raw_hook);
-        (void)platform_.flush_instruction_cache(
-            platform_.get_current_process(), slot, sizeof(void*));
+    if (!RestoreProtection(slot, oldProtection)) {
+        platform_.compareExchangePointer(
+            reinterpret_cast<PVOID volatile*>(slot), observedOriginal, rawHook);
+        (void)platform_.flushInstructionCache(
+            platform_.getCurrentProcess(), slot, sizeof(void*));
         BeginProtectionRecovery(
-            slot, old_protection, VtableHookStatus::ProtectionRestoreFailed);
+            slot, oldProtection, VtableHookStatus::ProtectionRestoreFailed);
         return VtableHookStatus::ProtectionRestoreFailed;
     }
 
     state_ = State::Active;
     slot_ = slot;
-    original_ = reinterpret_cast<MovieRootGetVariable>(observed_original);
-    hook_ = raw_hook;
+    original_ = reinterpret_cast<MovieRootGetVariable>(observedOriginal);
+    hook_ = rawHook;
     return VtableHookStatus::Installed;
 }
 
@@ -184,37 +184,37 @@ VtableHookStatus VtableHook::Restore() noexcept {
         return VtableHookStatus::InvalidPlatform;
     }
     if (state_ == State::ProtectionRecovery) {
-        if (!RestoreProtection(slot_, recovery_old_protection_)) {
+        if (!RestoreProtection(slot_, recoveryOldProtection_)) {
             return VtableHookStatus::ProtectionRestoreFailed;
         }
-        const auto terminal_result = recovery_result_;
+        const auto terminalResult = recoveryResult_;
         Clear();
-        return terminal_result;
+        return terminalResult;
     }
     if (!IsReadableSlot(slot_)) {
         return VtableHookStatus::SlotNotReadable;
     }
 
-    DWORD old_protection{};
-    if (platform_.virtual_protect(slot_, sizeof(void*), PAGE_READWRITE, &old_protection) == FALSE) {
+    DWORD oldProtection{};
+    if (platform_.virtualProtect(slot_, sizeof(void*), PAGE_READWRITE, &oldProtection) == FALSE) {
         return VtableHookStatus::ProtectFailed;
     }
 
-    const auto observed = platform_.compare_exchange_pointer(
+    const auto observed = platform_.compareExchangePointer(
         reinterpret_cast<PVOID volatile*>(slot_), reinterpret_cast<void*>(original_), hook_);
-    const bool changed_by_another_writer = observed != hook_;
-    const bool flushed = changed_by_another_writer || platform_.flush_instruction_cache(
-        platform_.get_current_process(), slot_, sizeof(void*)) != FALSE;
-    const auto terminal_result = changed_by_another_writer
+    const bool changedByAnotherWriter = observed != hook_;
+    const bool flushed = changedByAnotherWriter || platform_.flushInstructionCache(
+        platform_.getCurrentProcess(), slot_, sizeof(void*)) != FALSE;
+    const auto terminalResult = changedByAnotherWriter
         ? VtableHookStatus::ReplacedByAnotherWriter
         : (flushed ? VtableHookStatus::Restored : VtableHookStatus::FlushFailed);
-    if (!RestoreProtection(slot_, old_protection)) {
-        BeginProtectionRecovery(slot_, old_protection, terminal_result);
+    if (!RestoreProtection(slot_, oldProtection)) {
+        BeginProtectionRecovery(slot_, oldProtection, terminalResult);
         return VtableHookStatus::ProtectionRestoreFailed;
     }
 
     Clear();
-    return terminal_result;
+    return terminalResult;
 }
 
 bool VtableHook::IsActive() const noexcept {

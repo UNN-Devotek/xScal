@@ -17,11 +17,11 @@ struct RuntimeVersion final {
 };
 
 struct ExecutableConfig final {
-    RuntimeVersion runtime_version;
-    std::uintptr_t primary_get_variable_slot;
-    std::uintptr_t get_member;
-    std::uintptr_t set_member;
-    std::uintptr_t release_value;
+    RuntimeVersion runtimeVersion;
+    std::uintptr_t primaryGetVariableSlot;
+    std::uintptr_t getMember;
+    std::uintptr_t setMember;
+    std::uintptr_t releaseValue;
 };
 
 }

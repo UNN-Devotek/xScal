@@ -10,29 +10,29 @@ namespace sf {
 
 struct RuntimeProcessPlatform final {
     using ReadRuntimeVersionFn = bool(*)(
-        const wchar_t* executable_path,
+        const wchar_t* executablePath,
         config::RuntimeVersion& version) noexcept;
 
-    decltype(&::GetModuleFileNameW) get_module_file_name{};
-    decltype(&::GetModuleHandleW) get_module_handle{};
-    ReadRuntimeVersionFn read_runtime_version{};
-    decltype(&::MessageBoxW) message_box{};
+    decltype(&::GetModuleFileNameW) getModuleFileName{};
+    decltype(&::GetModuleHandleW) getModuleHandle{};
+    ReadRuntimeVersionFn readRuntimeVersion{};
+    decltype(&::MessageBoxW) messageBox{};
 };
 [[nodiscard]] RuntimeProcessPlatform SystemRuntimeProcessPlatform() noexcept;
 
 class BridgeRuntime final {
 public:
     explicit BridgeRuntime(
-        CallbackRegistry& callback_registry,
+        CallbackRegistry& callbackRegistry,
         VtableHookPlatform platform = SystemVtableHookPlatform()) noexcept;
 
     BridgeRuntime(const BridgeRuntime&) = delete;
     BridgeRuntime& operator=(const BridgeRuntime&) = delete;
 
     [[nodiscard]] VtableHookStatus Initialize(
-        std::wstring_view executable_name,
-        std::uintptr_t module_base,
-        const config::RuntimeVersion& runtime_version) noexcept;
+        std::wstring_view executableName,
+        std::uintptr_t moduleBase,
+        const config::RuntimeVersion& runtimeVersion) noexcept;
 
     [[nodiscard]] VtableHookStatus Shutdown() noexcept;
     [[nodiscard]] bool IsActive() const noexcept;

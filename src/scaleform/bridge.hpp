@@ -18,19 +18,19 @@ namespace sf {
 struct FunctionParams final {
     void* result{};
     void* movie{};
-    ScaleformValue* this_object{};
-    void* unknown_18{};
+    ScaleformValue* thisObject{};
+    void* unknown18{};
     const std::byte* arguments{};
-    std::uint32_t argument_count{};
+    std::uint32_t argumentCount{};
 };
 
 static_assert(offsetof(FunctionParams, result) == 0x00);
 static_assert(offsetof(FunctionParams, arguments) == 0x20);
-static_assert(offsetof(FunctionParams, argument_count) == 0x28);
+static_assert(offsetof(FunctionParams, argumentCount) == 0x28);
 
 class NativeFunctionHandler final {
 public:
-    explicit NativeFunctionHandler(CallbackRegistry& callback_registry) noexcept;
+    explicit NativeFunctionHandler(CallbackRegistry& callbackRegistry) noexcept;
 
     [[nodiscard]] void* AsScaleformHandler() noexcept { return this; }
 
@@ -43,29 +43,29 @@ private:
     const HandlerVtableEntry* vtable_;
     // GFxFunctionHandler derives from GRefCountBase. Scaleform owns this
     // prefix and performs 32-bit interlocked ref-count operations at +0x08.
-    volatile std::int32_t reference_count_;
-    std::uint32_t reference_count_padding_;
+    volatile std::int32_t referenceCount_;
+    std::uint32_t referenceCountPadding_;
 
     // The recovered game and reference handlers are exactly the 0x10-byte
     // GRefCountBase prefix. Keep bridge state out of the ABI object.
-    static CallbackRegistry* callback_registry_;
+    static CallbackRegistry* callbackRegistry_;
 };
 
 // Parses one 48-byte FunctionParams argument using the two candidates
 // recovered in sub_180145E30. The returned name aliases game-owned storage.
 [[nodiscard]] bool TryDecodeScaleformString(
-    const std::byte* argument_record,
-    std::string_view& decoded_string) noexcept;
+    const std::byte* argumentRecord,
+    std::string_view& decodedString) noexcept;
 
 // Safely addresses and decodes one argument from a callback invocation.
 [[nodiscard]] bool TryGetScaleformStringArgument(
     const ScaleformCall& call,
-    std::size_t argument_index,
-    std::string_view& decoded_string) noexcept;
+    std::size_t argumentIndex,
+    std::string_view& decodedString) noexcept;
 
 struct ScaleformValueInfo final {
-    std::uint8_t raw_type{};
-    void* object_interface{};
+    std::uint8_t rawType{};
+    void* objectInterface{};
     void* data{};
 };
 
@@ -82,9 +82,9 @@ using ScaleformReleaseValueRoutine = void(__fastcall*)(
     void*, ScaleformValue*, void*);
 
 struct ResolvedScaleformApi final {
-    ScaleformGetMemberRoutine get_member{};
-    ScaleformSetMemberRoutine set_member{};
-    ScaleformReleaseValueRoutine release_value{};
+    ScaleformGetMemberRoutine getMember{};
+    ScaleformSetMemberRoutine setMember{};
+    ScaleformReleaseValueRoutine releaseValue{};
 };
 
 enum class ResolveScaleformApiStatus {
@@ -95,47 +95,47 @@ enum class ResolveScaleformApiStatus {
 
 [[nodiscard]] ResolveScaleformApiStatus ResolveScaleformApi(
     const TargetProfile& profile,
-    std::uintptr_t module_base,
-    platform::VirtualQueryFn virtual_query,
+    std::uintptr_t moduleBase,
+    platform::VirtualQueryFn virtualQuery,
     ResolvedScaleformApi& resolved) noexcept;
 
 struct MovieRootContext final {
-    void* movie_root{};
-    MovieRootGetVariable original_get_variable{};
+    void* movieRoot{};
+    MovieRootGetVariable originalGetVariable{};
     ResolvedScaleformApi api{};
-    NativeFunctionHandler* function_handler{};
+    NativeFunctionHandler* functionHandler{};
 };
 
 // Creates __SFCodeObj.call and attaches it directly to an already-resolved UI
-// component. On success out_bridge owns the newly-created object and the
+// component. On success outBridge owns the newly-created object and the
 // caller must eventually ReleaseValue().
 [[nodiscard]] bool AttachSFCodeObjectToComponent(
     MovieRootContext& context,
     ScaleformValue& component,
-    ScaleformValue& out_bridge) noexcept;
+    ScaleformValue& outBridge) noexcept;
 
 // Resolves root1, then delegates to AttachSFCodeObjectToComponent().
 [[nodiscard]] bool AttachSFCodeObjectToRoot(
     MovieRootContext& context,
-    ScaleformValue& out_bridge) noexcept;
+    ScaleformValue& outBridge) noexcept;
 
 // Creates only the native `call` function through MovieRoot's recovered
 // +0x180 factory. The caller owns the resulting value.
 [[nodiscard]] bool CreateNativeCallFunction(
     MovieRootContext& context,
-    ScaleformValue& out_function) noexcept;
+    ScaleformValue& outFunction) noexcept;
 
 [[nodiscard]] bool GetScaleformMember(
     const MovieRootContext& context,
     ScaleformValue& object,
-    const char* member_name,
-    ScaleformValue& out_value) noexcept;
+    const char* memberName,
+    ScaleformValue& outValue) noexcept;
 
 [[nodiscard]] bool SetScaleformMember(
     const MovieRootContext& context,
     ScaleformValue& object,
-    const char* member_name,
-    ScaleformValue& member_value) noexcept;
+    const char* memberName,
+    ScaleformValue& memberValue) noexcept;
 
 void ReleaseValue(
     const MovieRootContext& context,

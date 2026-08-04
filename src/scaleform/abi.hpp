@@ -14,10 +14,10 @@ struct alignas(16) ScaleformValue final {
 
 // MovieRoot::GetVariable at vtable offset 0x190 in the supported builds.
 using MovieRootGetVariable = bool(__fastcall*)(
-    void* movie_root,
-    ScaleformValue* out_value,
+    void* movieRoot,
+    ScaleformValue* outValue,
     const char* path,
-    unsigned int caller_r9_scratch);
+    unsigned int callerR9Scratch);
 
 static_assert(sizeof(ScaleformValue) == layout::kValueSize);
 static_assert(alignof(ScaleformValue) == 16);
