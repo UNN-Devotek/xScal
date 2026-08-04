@@ -41,7 +41,7 @@ namespace sf {
         };
 
         constexpr std::array kScaleformCallbackHandlers{
-            ScaleformCallbackDefinition{"GetZFERuntimeInfo",          &HandleGetXScalRuntimeInfo},
+            ScaleformCallbackDefinition{"GetXSRuntimeInfo",          &HandleGetXScalRuntimeInfo}, // It was named GetZFERuntimeInfo because ImprovedBars mod used that internally. 
             ScaleformCallbackDefinition{"ReadIHBData",                &HandleReadIhbData},
             ScaleformCallbackDefinition{"WriteIHBData",               &HandleWriteIhbData},
 
