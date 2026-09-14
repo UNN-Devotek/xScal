@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "provider": "xscal",
+  "runtime": "xScal Chat",
+  "capability": "xscal-chat-interface",
+  "requiredChatMethods": ["connect", "pollEvents", "sendMessage"],
+  "optionalChatMethods": ["getRuntimeInfo", "getAuthState", "getConnectionState", "reportMessage", "disconnect", "clearChatAuth"],
+  "inputCallbacks": ["Input.RegisterKey", "Input.IsKeyPressed", "Input.UnregisterKey"],
+  "keys": {"insert": 45, "up": 38, "down": 40, "prevPage": 33, "nextPage": 34, "delete": 46},
+  "events": [
+    {"messageId": "sim-1", "channel": "global", "displayName": "VaultTester", "body": "Regular link https://example.com/path", "targetUserId": ""},
+    {"messageId": "sim-2", "channel": "events", "displayName": "EventBot", "body": "Event https://discord.com/events/123/456", "targetUserId": ""},
+    {"messageId": "sim-3", "channel": "trade", "displayName": "Merchant", "body": "Channel https://discord.com/channels/123/789", "targetUserId": "discord:111222333"}
+  ]
+}

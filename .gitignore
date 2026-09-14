@@ -1,5 +1,10 @@
 /build/
+/build-contract/
 /dist/
 /src/config/config.local.h
 /tests/
+!/tests/
+!/tests/fcm_contract_tests.cpp
+!/tests/fixtures/
+!/tests/fixtures/fcm_xscal_scenario.json
 /Fallout76_CURR.i64
