@@ -24,7 +24,6 @@ if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif()
 
 enable_language(ASM_MASM)
-configure_file(src/dxgi_proxy.asm ${CMAKE_CURRENT_BINARY_DIR}/dxgi_proxy.asm COPYONLY)
 
 set(XSCAL_CORE_SOURCES
     src/api/scaleform_callbacks.cpp
@@ -44,7 +43,7 @@ add_library(dxgi SHARED
     ${XSCAL_CORE_SOURCES}
     src/dllmain.cpp
     src/dxgi_proxy.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/dxgi_proxy.asm
+    src/dxgi_proxy.asm
     src/dxgi_proxy.def
 )
 
