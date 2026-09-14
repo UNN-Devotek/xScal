@@ -24,18 +24,6 @@ build.bat
 ```
 Needs at least MSVC 2019
 
-Portable FCM contract tests can also be built on Linux, macOS, or Windows without producing or
-loading the native proxy:
-
-```sh
-cmake -S . -B build-contract -DXSCAL_BUILD_NATIVE=OFF
-cmake --build build-contract
-ctest --test-dir build-contract --output-on-failure
-```
-
-The `src/fcm` target and `tests/fixtures/fcm_xscal_scenario.json` are an attributed FCM integration
-extension. They model the chat and numeric input contracts without hooking a game process.
-
 ## Extending callbacks
 
 ActionScript callbacks are defined in [`src/api/scaleform_callbacks.cpp`](src/api/scaleform_callbacks.cpp).  

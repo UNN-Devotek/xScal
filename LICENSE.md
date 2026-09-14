@@ -1,8 +1,5 @@
 Copyright (c) 2026 DCHoaxer and contributors
 
-FCM integration modifications (2026): portable chat/input contract model, deterministic fixture,
-and cross-platform contract tests added by UNN-Devotek.
-
 # xScal Source-Available License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and its associated documentation files (the "Software"), to use, copy, study, modify, and redistribute the Software, subject to the following conditions:
